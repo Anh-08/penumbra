@@ -76,6 +76,21 @@ TRUTH: dict[str, Param] = {
     "spread_capacity": Param(0.01, "-", "assumed: cell lot capacity spread"),
     "spread_array": Param(0.01, "-", "assumed: array output spread"),
     "spread_load": Param(0.02, "-", "assumed: load power spread"),
+    # ---- faults (T08) ----
+    "r0_growth_per_fade": Param(0.645, "-", PCOE + ": R0 rises (0.1535/0.1286 - 1) = 19 % at 30 % capacity fade; "
+                                "relative R0 increase per unit of fade"),
+    # Parameter ranges per hypothesis H1..H5 (uniform). Used to sample seeded faults and by the planning model.
+    "fault_ranges": Param(
+        {
+            "array_degradation": {"loss": (0.10, 0.60), "panel": ("PY", "MY", "ALL")},
+            "stuck_on_load": {"load": ("AUX", "HEATER", "PAYLOAD")},
+            "capacity_fade": {"remaining": (0.45, 0.85)},
+            "sensor_bias": {"channel": ("soc", "v_bus", "i_bat"),
+                            "bias": {"soc": (0.05, 0.20), "v_bus": (0.2, 0.8), "i_bat": (0.2, 1.0)}},
+            "beta_season": {"extra_beta_deg": (15.0, 40.0)},
+        },
+        "-", "assumed: ranges wide enough to matter in one orbit, small enough to be survivable with a plan"),
+    "fault_onset_window": Param(0.25, "-", "assumed: seeded fault onset uniform in the first 25 % of the horizon"),
     # ---- sensors: (noise sigma, quantization LSB, calibration-bias sigma) ----
     "sensors": Param(
         {
