@@ -1,0 +1,99 @@
+/* Penumbra design tokens. Source of truth for frontend/ (A2 copies this file).
+   See docs/design/DESIGN.md for the rules behind each value. */
+
+:root {
+  /* Surfaces */
+  --c-space: #05080d;                 /* page and globe background */
+  --c-panel: rgba(9, 14, 22, 0.86);   /* HUD panel over the globe (with blur) */
+  --c-panel-solid: #0b111a;           /* fallback when backdrop-filter is off */
+  --c-raise: #121b27;                 /* rows, hover, pending cells */
+  --c-line: #1e2a3a;                  /* hairlines */
+  --c-line-strong: #2c3b50;           /* panel frame, axis */
+
+  /* Ink */
+  --c-ink: #e9eff7;                   /* primary text, 16:1 on panel */
+  --c-ink-2: #a3b1c4;                 /* secondary text, 8:1 */
+  --c-ink-3: #74839a;                 /* tertiary, only at >= 15px, 4.9:1 */
+
+  /* The three semantic accents. Each has one meaning and nothing else uses it. */
+  --c-alert: #ffb224;                 /* amber: needs attention (alerts, awaiting human) */
+  --c-alert-ink: #1a1200;             /* text on amber */
+  --c-alert-12: rgba(255, 178, 36, 0.12);
+  --c-verified: #35d49a;              /* green: physics verified, executed */
+  --c-verified-ink: #00140c;
+  --c-verified-14: rgba(53, 212, 154, 0.14);
+  --c-refused: #ff5468;               /* red: failed verification, refused, SOC_MIN */
+  --c-refused-ink: #1a0004;
+  --c-refused-14: rgba(255, 84, 104, 0.14);
+
+  /* Data viz (neutral: the model is not a verdict) */
+  --c-band: rgba(163, 177, 196, 0.22);   /* verifier p5-p95 */
+  --c-p50: #a3b1c4;
+  --c-truth: #ffffff;                    /* hidden truth line + downlinked points */
+  --c-eclipse: rgba(0, 0, 0, 0.5);
+  --c-contact: rgba(233, 239, 247, 0.08);
+  --hatch: repeating-linear-gradient(135deg, var(--c-ink-3) 0 2px, transparent 2px 6px);
+
+  /* Type (self-host via @fontsource for offline: barlow, barlow-semi-condensed, jetbrains-mono) */
+  --font-ui: "Barlow", system-ui, sans-serif;
+  --font-cond: "Barlow Semi Condensed", "Barlow", system-ui, sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, monospace;
+
+  --fs-hero: 48px;     /* attract statement only */
+  --fs-2m: 30px;       /* 2 m tier: sat id, APPROVE, REFUSED, stage stepper */
+  --fs-title: 22px;    /* caption line, panel focus value */
+  --fs-body: 18px;     /* 1 m tier: rows, labels in matrix */
+  --fs-data: 17px;     /* mono: trace, numbers, hash */
+  --fs-label: 15px;    /* uppercase panel labels, legend. Nothing smaller. */
+
+  --lh-tight: 1.15;
+  --lh-body: 1.4;
+  --track-label: 0.08em;
+
+  /* Spacing (4 px base) */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
+
+  /* Shape and depth */
+  --r-1: 2px;
+  --r-2: 4px;
+  --shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --blur-panel: blur(12px) saturate(1.1);
+
+  /* Layout, 1920x1080 expo screen */
+  --inset: 16px;
+  --gap: 16px;
+  --top-h: 64px;
+  --rc-w: 440px;       /* right column */
+  --strip-h: 168px;    /* trace strip and Flight Director bar */
+
+  /* Motion */
+  --dur-1: 120ms;  --dur-2: 240ms;  --dur-3: 400ms;  --dur-4: 600ms;
+  --dur-shake: 420ms;  --dur-draw: 2000ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);   /* GSAP expo.out */
+  --ease-in: cubic-bezier(0.55, 0, 1, 0.45);   /* GSAP power2.in */
+
+  /* Z-order */
+  --z-globe: 0; --z-labels: 10; --z-hud: 20; --z-top: 30;
+  --z-overlay: 40; --z-fd: 50; --z-banner: 60; --z-presenter: 90;
+}
+
+/* 1366x768 laptop variant (presenter fallback, viewed from about 1 m) */
+@media (max-width: 1599px) {
+  :root {
+    --fs-hero: 34px; --fs-2m: 22px; --fs-title: 17px;
+    --fs-body: 15px; --fs-data: 14px; --fs-label: 13px;
+    --inset: 12px; --gap: 12px; --top-h: 48px;
+    --rc-w: 320px; --strip-h: 112px;
+  }
+}
+
+/* Browser surfaces carry the palette too */
+::selection { background: var(--c-alert); color: var(--c-alert-ink); }
+:focus-visible { outline: 2px solid var(--c-ink); outline-offset: 2px; }
+* { scrollbar-width: thin; scrollbar-color: var(--c-line-strong) transparent; }
+.num { font-family: var(--font-data); font-variant-numeric: tabular-nums slashed-zero; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-1: 0ms; --dur-2: 0ms; --dur-3: 0ms; --dur-4: 0ms; --dur-shake: 0ms; --dur-draw: 0ms; }
+}
