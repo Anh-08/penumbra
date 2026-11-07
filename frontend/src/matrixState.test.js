@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createMatrixState, rankedPlanId, reduceMatrix, scheduleConflicts } from './matrixState.js';
+import { cellPasses, createMatrixState, rankedPlanId, reduceMatrix, scheduleConflicts } from './matrixState.js';
 
 const result = (plan_id, min_soc_p5, pass_rate) => ({
   sim_id: `S-${plan_id.slice(2)}`, plan_id, plan_hash: `${plan_id}-hash`,
@@ -28,6 +28,14 @@ test('matrix updates append each backend SimResult once and preserve its SOC and
   assert.equal(state.bySat['SAT-07'].freshPlanId, 'P-2');
   assert.equal(state.bySat['SAT-07'].complete, true);
   assert.equal(rankedPlanId(state.bySat['SAT-07']), 'P-2');
+});
+
+test('cell color uses the backend pass-rate threshold, while the plan verdict remains passes_all', () => {
+  assert.equal(cellPasses({ pass_rate: .949 }), false);
+  assert.equal(cellPasses({ pass_rate: .95 }), true);
+  const backendResult = { ...result('P-4', .35, .95), passes_all: false };
+  assert.equal(cellPasses(backendResult.per_hyp.H2), true);
+  assert.equal(backendResult.passes_all, false);
 });
 
 test('infeasible comes only from fleet_state safe_mode_recommended', () => {

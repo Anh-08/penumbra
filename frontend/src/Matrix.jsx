@@ -1,4 +1,4 @@
-import { rankedPlanId } from './matrixState.js';
+import { cellPasses, rankedPlanId } from './matrixState.js';
 
 const HYPOTHESES = ['H0', 'H1', 'H2', 'H3', 'H4', 'H5'];
 
@@ -10,7 +10,7 @@ function MatrixCell({ result, hypothesis, plausible, fresh, rowIndex }) {
   const stats = result.per_hyp?.[hypothesis];
   if (!stats) return <div className="matrix-cell pending" role="cell">—</div>;
   const ruledOut = !plausible.has(hypothesis);
-  const passed = stats.pass_rate === 1;
+  const passed = cellPasses(stats);
   return <div
     className={`matrix-cell ${ruledOut ? 'ruled-out' : passed ? 'passed' : 'failed'} ${fresh ? 'arriving' : ''}`}
     style={{ '--cell-index': rowIndex }}
@@ -65,6 +65,9 @@ export function MatrixOverlay({ satId, matrix, hypotheses, conflict, status, sel
             className={`matrix-plan-head ${backendFirstPlanId === result.plan_id ? infeasible ? 'safe-mode' : 'best' : ''} ${selectedPlanId === result.plan_id ? 'selected' : ''}`}
             onClick={() => onSelectPlan(result.plan_id)} role="columnheader">
             <strong>{result.plan_id}</strong>
+            <span className={`matrix-verdict ${result.passes_all ? 'passed' : 'failed'}`}>
+              {result.passes_all ? 'PASSES ALL' : 'FAILS'}
+            </span>
             {backendFirstPlanId === result.plan_id && <small>{infeasible ? 'RECOMMEND SAFE_MODE' : 'BEST · VERIFIER'}</small>}
           </button>)}
         </div>

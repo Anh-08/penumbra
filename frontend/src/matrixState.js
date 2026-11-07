@@ -6,6 +6,10 @@ export function rankedPlanId(matrix) {
   return matrix?.complete ? matrix.results[0]?.plan_id ?? null : null;
 }
 
+export function cellPasses(stats) {
+  return stats?.pass_rate >= 0.95;
+}
+
 function matrixFor(state, satId) {
   return state.bySat[satId] ?? {
     results: [], complete: false, freshPlanId: null, sequence: 0,
