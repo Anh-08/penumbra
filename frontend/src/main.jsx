@@ -9,5 +9,6 @@ import '@fontsource/jetbrains-mono/600.css';
 import App from './App.jsx';
 import './styles/tokens.css';
 import './styles.css';
+import './matrix.css';
 
 createRoot(document.getElementById('root')).render(<App />);
