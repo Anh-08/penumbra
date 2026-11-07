@@ -136,3 +136,31 @@ class EpsParams:
     @property
     def v_shed(self) -> float:
         return self.v_shed_cell * self.n_series
+
+
+# ---------------------------------------------------------------------------------------------
+# Planning model (T11): what the ground segment believes. It is deliberately NOT the truth:
+# datasheet and design values instead of measured ones, a coarser OCV curve, no temperature
+# dependence of R0, no unit-to-unit spread. Mismatches point both ways (capacity and coulombic
+# efficiency optimistic; array output and R0 at 25 degC pessimistic), as with real design values.
+# The verifier's Monte Carlo sigma must cover the gap.
+# ---------------------------------------------------------------------------------------------
+PLANNING: dict[str, Param] = {
+    **TRUTH,
+    "cell_capacity_ah": Param(2.0, "Ah", "datasheet: 18650 rated capacity (truth uses the PCoE-measured 1.91 Ah)"),
+    "soc_grid": Param((0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0), "-", "assumed: coarse 7-point OCV table"),
+    "ocv_cell_v": Param((3.0, 3.55, 3.70, 3.80, 3.93, 4.08, 4.20), "V",
+                        "assumed: generic Li-ion datasheet curve (truth uses the PCoE fit)"),
+    "r0_cell_ohm": Param(0.14, "ohm", "design value: 18650 DC resistance with ageing margin (truth: PCoE 0.1286 ohm)"),
+    "r_temp_b": Param(0.0, "K", "assumed: planning ignores the temperature dependence of R0"),
+    "coulombic_eff": Param(0.99, "-", "datasheet: typical (truth: PCoE 0.982)"),
+    "cell_efficiency": Param(0.29, "-", "design value: triple-junction GaAs with EOL margin (truth: 0.295)"),
+    "regulator_eff": Param(0.94, "-", "design value (truth: 0.95)"),
+    "thermal_conductance": Param(0.5, "W/K", "design estimate (truth: 0.4)"),
+    "spread_capacity": Param(0.0, "-", "planning has no unit spread; Monte Carlo covers it"),
+    "spread_array": Param(0.0, "-", "planning has no unit spread; Monte Carlo covers it"),
+    "spread_load": Param(0.0, "-", "planning has no unit spread; Monte Carlo covers it"),
+}
+
+# Parameters whose planning value differs from the truth, for results files and the README.
+PLANNING_DIFFERENCES: tuple[str, ...] = tuple(k for k in PLANNING if PLANNING[k].value != TRUTH[k].value)
