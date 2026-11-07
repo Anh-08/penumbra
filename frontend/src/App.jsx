@@ -2,6 +2,8 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import { buildFleetState } from './mockFleet.js';
 import { createScene } from './scene.js';
 import { createPanelState, reducePanel } from './panelState.js';
+import { createMatrixState, reduceMatrix } from './matrixState.js';
+import { MatrixOverlay } from './Matrix.jsx';
 import {
   DirectorSlot, HypothesesPanel, ProvenanceLegend, TopBar, TracePanel, TriageQueue,
 } from './Panels.jsx';
@@ -17,6 +19,8 @@ function App() {
   const [fleet, setFleet] = useState(initialFleet);
   const [selected, setSelected] = useState('SAT-07');
   const [panel, dispatch] = useReducer(reducePanel, undefined, createPanelState);
+  const [matrix, dispatchMatrix] = useReducer(reduceMatrix, undefined, createMatrixState);
+  const [selectedPlanId, setSelectedPlanId] = useState(null);
   const [localPreview, setLocalPreview] = useState(true);
   const [sceneError, setSceneError] = useState(false);
 
@@ -49,6 +53,7 @@ function App() {
         let message;
         try { message = JSON.parse(event.data); } catch { return; }
         if (!message?.type || !message?.data) return;
+        dispatchMatrix(message);
         if (message.type === 'fleet_state') {
           hasApiFleet.current = true;
           setLocalPreview(false);
@@ -61,6 +66,7 @@ function App() {
           firstAlertSeen.current = true;
           setSelected(message.data.sat_id);
         }
+        if (message.type === 'matrix') setSelected(message.data.sat_id);
         dispatch(message);
       };
       socket.onclose = () => {
@@ -87,7 +93,9 @@ function App() {
     scene.current?.setMotionActive?.(['attract', 'storm', 'fastforward'].includes(panel.phase));
   }, [panel.phase]);
 
-  const showPanels = panel.phase !== 'attract' || panel.alerts.length > 0 || panel.trace.length > 0
+  const activeMatrix = matrix.bySat[selected];
+  const matrixOpen = Boolean(activeMatrix?.results.length);
+  const showPanels = matrixOpen || panel.phase !== 'attract' || panel.alerts.length > 0 || panel.trace.length > 0
     || Object.keys(panel.hypotheses).length > 0;
   const daylight = fleet.sats.filter((sat) => sat.illum >= 0.95).length;
   const penumbra = fleet.sats.filter((sat) => sat.illum > 0.05 && sat.illum < 0.95).length;
@@ -102,7 +110,7 @@ function App() {
     </div>
 
     <TopBar phase={panel.phase} mode={mode} time={fleet.t} speed={fleet.speed}
-      hasVerification={panel.trace.some((row) => row.tool === 'simulate')} />
+      hasVerification={matrixOpen || panel.trace.some((row) => row.tool === 'simulate')} />
 
     {!showPanels && <>
       <div className="poster-line">Every satellite in that shadow<br />is running on battery.</div>
@@ -115,11 +123,15 @@ function App() {
       </div>
     </>}
 
-    {showPanels && <>
+    {showPanels && !matrixOpen && <>
       <TriageQueue alerts={panel.alerts} now={fleet.t} selected={selected} onSelect={setSelected} />
       <HypothesesPanel satId={selected} message={panel.hypotheses[selected]} />
       <TracePanel callout={panel.callout} rows={panel.trace} mode={mode} />
     </>}
+
+    {matrixOpen && <MatrixOverlay satId={selected} matrix={activeMatrix}
+      hypotheses={panel.hypotheses[selected]} schedule={matrix.schedule}
+      selectedPlanId={selectedPlanId} onSelectPlan={setSelectedPlanId} />}
 
     <ProvenanceLegend localPreview={localPreview} />
     <DirectorSlot />
