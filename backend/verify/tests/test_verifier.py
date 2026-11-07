@@ -73,10 +73,10 @@ def test_plan_hash_changes_when_any_command_changes(env):
 
 
 def test_nothing_feasible_means_infeasible_with_safe_mode():
-    # half the array gone at beta 40 deg from SOC 0.5: cutting the payload to 0.2 still drains it,
-    # only SAFE_MODE survives (margins about -0.30 vs +0.14, found by a parameter scan)
-    env = synthetic.environment((SAT,), hours=24, t0=T0, beta_deg=40.0, contact_every_s=5400.0, contact_len_s=600.0)
-    b = make_belief(["H1"], {"H1": {"loss": 0.5, "panel": "ALL"}}, soc=0.5, duty=1.0)
+    # 60 % of the array gone (40 % of each orbit in shadow) from SOC 0.6: cutting the payload to 0.2
+    # still drains it, only SAFE_MODE survives (margins about -0.30 vs +0.22, found by a parameter scan)
+    env = synthetic.environment((SAT,), hours=24, t0=T0, beta_deg=0.0, contact_every_s=5400.0, contact_len_s=600.0)
+    b = make_belief(["H1"], {"H1": {"loss": 0.6, "panel": "ALL"}}, soc=0.6, duty=1.0)
     v = verifier(env, b)
     rd = v.simulate(plan(env, "P-1", DUTY_LOW))
     rs = v.simulate(plan(env, "P-2", SAFE))

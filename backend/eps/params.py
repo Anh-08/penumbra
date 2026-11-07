@@ -31,8 +31,11 @@ TRUTH: dict[str, Param] = {
     "cell_efficiency": Param(0.295, "-", "assumed: triple-junction GaAs cell, BOL"),
     "packing_factor": Param(0.90, "-", "assumed: cell area / panel area"),
     "regulator_eff": Param(0.95, "-", "assumed: MPPT regulator efficiency"),
-    # Incidence: 1-axis tracking about the orbit normal leaves cos(beta) as the incidence factor.
-    "incidence_model": Param("cos_beta", "-", "assumed: 1-axis tracking wings, incidence factor cos(beta)"),
+    # Incidence: each satellite's wings are set up for its own orbit's beta (sun-tracking in that design
+    # attitude), so nominal incidence is 1 at any beta; beta enters through the eclipse geometry
+    # (illumination from backend/orbit). A beta season (beta drifting delta from the design value) costs cos(delta).
+    "incidence_model": Param("cos_beta_drift", "-", "assumed: sun-tracking wings in a per-orbit design attitude; "
+                             "incidence factor cos(beta drift from design)"),
     # ---- battery: 4s3p pack of PCoE-type 18650 cells ----
     "n_series": Param(4, "-", "assumed: 4s3p pack"),
     "n_parallel": Param(3, "-", "assumed: 4s3p pack"),
@@ -153,7 +156,8 @@ PLANNING: dict[str, Param] = {
     "ocv_cell_v": Param((3.0, 3.55, 3.70, 3.80, 3.93, 4.08, 4.20), "V",
                         "assumed: generic Li-ion datasheet curve (truth uses the PCoE fit)"),
     "r0_cell_ohm": Param(0.14, "ohm", "design value: 18650 DC resistance with ageing margin (truth: PCoE 0.1286 ohm)"),
-    "r_temp_b": Param(0.0, "K", "assumed: planning ignores the temperature dependence of R0"),
+    "r_temp_b": Param(2500.0, "K", "design estimate of the Arrhenius factor (truth: 3000 K). Ignoring it made "
+                      "cold-pass voltage steps look like capacity fade on the real orbit"),
     "coulombic_eff": Param(0.99, "-", "datasheet: typical (truth: PCoE 0.982)"),
     "cell_efficiency": Param(0.29, "-", "design value: triple-junction GaAs with EOL margin (truth: 0.295)"),
     "regulator_eff": Param(0.94, "-", "design value (truth: 0.95)"),

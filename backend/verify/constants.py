@@ -32,6 +32,10 @@ SIGMA = {   # about 1.5x the nominal RMS measured over 6 seeds x beta 0/25/45 de
     "t_bat_c":    {"mean": 0.3, "within": 0.35, "far": 1.6},
     "i_array":    {"mean": 0.12, "within": 0.11, "far": 0.09},
 }
+# Near full charge the predicted charge current follows the taper, so an error in the restart SOC
+# (reading noise + calibration bias) becomes a current error: d(i)/d(SOC) = I_max / (1 - taper_soc).
+# Segments that restart above (taper_soc - 0.02) add that to the current sigma.
+SOC_RESTART_SIGMA = 0.01
 # Samples within a pass are correlated (model error); the within-pass term counts as this many
 # independent samples per channel and pass.
 WITHIN_EFFECTIVE_N = 6
