@@ -50,21 +50,27 @@ class UplinkScheduler:
         return parsed
 
     @staticmethod
-    def _bounds(request: ScheduleRequest, contact: Contact) -> tuple[int, int, int] | None:
+    def _bounds(
+        request: ScheduleRequest, contact: Contact, now: float | None = None
+    ) -> tuple[int, int, int] | None:
         duration = math.ceil(request.duration_s)
-        earliest = math.ceil(contact.aos)
+        earliest = math.ceil(max(contact.aos, now)) if now is not None else math.ceil(contact.aos)
         latest = math.floor(min(contact.los, request.deadline_t)) - duration
         return (earliest, latest, duration) if earliest <= latest else None
 
-    def schedule(self, requests: Sequence[ScheduleRequest | Mapping]) -> ScheduleResult:
-        """Maximize scheduled priority, respecting deadlines and station use."""
+    def schedule(
+        self, requests: Sequence[ScheduleRequest | Mapping], now: float | None = None
+    ) -> ScheduleResult:
+        """Maximize priority without booking before now or past a deadline."""
+        if now is not None and not math.isfinite(now):
+            raise ValueError("now must be a finite POSIX timestamp")
         start_time = time.perf_counter()
         parsed = self._requests(requests)
         if cp_model is not None:
-            result = self._cpsat(parsed, start_time)
+            result = self._cpsat(parsed, start_time, now)
             if result is not None:
                 return result
-        return self._greedy(parsed, start_time)
+        return self._greedy(parsed, start_time, now)
 
     def _finish(
         self,
@@ -90,7 +96,9 @@ class UplinkScheduler:
         )
         return result
 
-    def _cpsat(self, requests: list[ScheduleRequest], start_time: float) -> ScheduleResult | None:
+    def _cpsat(
+        self, requests: list[ScheduleRequest], start_time: float, now: float | None
+    ) -> ScheduleResult | None:
         model = cp_model.CpModel()
         by_station = defaultdict(list)
         candidates = []
@@ -99,7 +107,7 @@ class UplinkScheduler:
             choices = []
             weight = max(1, round(request.priority * PRIORITY_SCALE))
             for index, contact in enumerate(self._by_sat[request.sat_id]):
-                bounds = self._bounds(request, contact)
+                bounds = self._bounds(request, contact, now)
                 if bounds is None:
                     continue
                 earliest, latest, duration = bounds
@@ -136,13 +144,15 @@ class UplinkScheduler:
         ]
         return self._finish(requests, assignments, "cpsat", status == cp_model.OPTIMAL, start_time)
 
-    def _greedy(self, requests: list[ScheduleRequest], start_time: float) -> ScheduleResult:
+    def _greedy(
+        self, requests: list[ScheduleRequest], start_time: float, now: float | None
+    ) -> ScheduleResult:
         by_station = defaultdict(list)
         assignments = []
         for request in sorted(requests, key=lambda item: (-item.priority, item.deadline_t, item.plan_id)):
             options = []
             for contact in self._by_sat[request.sat_id]:
-                bounds = self._bounds(request, contact)
+                bounds = self._bounds(request, contact, now)
                 if bounds is None:
                     continue
                 earliest, latest, duration = bounds

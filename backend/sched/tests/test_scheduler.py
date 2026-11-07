@@ -105,3 +105,19 @@ def test_expired_dict_request_is_unscheduled():
     result = UplinkScheduler(CONTACTS).schedule([request])
     assert result.assignments == []
     assert result.unscheduled == ["P-7"]
+
+
+def test_now_never_books_a_past_slot_in_cpsat_or_greedy(monkeypatch):
+    request = ScheduleRequest(
+        plan_id="P-8", sat_id="SAT-01", priority=5,
+        deadline_t=120, duration_s=60,
+    )
+    scheduler = UplinkScheduler([CONTACTS[0]])
+    for fallback in (False, True):
+        if fallback:
+            monkeypatch.setattr(scheduler_module, "cp_model", None)
+        result = scheduler.schedule([request], now=50.25)
+        assert len(result.assignments) == 1
+        assert result.assignments[0].start_t >= 50.25
+        assert result.assignments[0].end_t <= 120
+        assert scheduler.schedule([request], now=60.25).unscheduled == ["P-8"]
