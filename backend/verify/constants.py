@@ -38,8 +38,31 @@ WITHIN_EFFECTIVE_N = 6
 # Next-pass residual uses the mean of its first samples only (before any commanded step).
 FAR_SAMPLES = 6
 
-# ---------------- limits (hard constraints; T12 uses them too) ----------------
+# ---------------- limits (hard constraints) ----------------
 SOC_MIN = 0.30
+V_MIN = 13.6          # V, 3.4 V/cell; the satellite sheds loads at 13.2 V
+T_MIN_C = 0.0         # no charging below 0 degC
+T_MAX_C = 40.0
+
+# ---------------- verification (T12) ----------------
+MONTE_CARLO_N = 100
+# 1-sigma Monte Carlo spread around each hypothesis, drawn per sample. They cover unit spread and the
+# planning-vs-truth mismatch (planning capacity is ~4.5 % optimistic, array ~2.7 % pessimistic).
+MC_SIGMA = {
+    "array_efficiency": 0.03,   # relative
+    "capacity": 0.05,           # relative
+    "load_power": 0.03,         # relative
+    "initial_soc": 0.02,        # absolute SOC
+    "soc_sensor_bias": 0.01,    # absolute SOC reading bias (shifts the true starting SOC)
+}
+# A hypothesis passes when at least this fraction of its Monte Carlo samples meets every hard constraint.
+PASS_RATE_REQUIRED = 0.95
+# A kind "plan" is judged to the end of the scenario horizon (24 h from T0). A kind "diagnostic" is
+# judged over its own window: first t_exec to the last step plus one dwell, plus one orbit.
+DIAGNOSTIC_DWELL_S = 60.0
+ORBIT_S = 5700.0
+# trajectory() is for drawing only: one point per this many seconds.
+TRAJECTORY_STEP_S = 60.0
 
 # ---------------- detection (T34) ----------------
 # A satellite is anomalous when the nominal hypothesis drops below this posterior.
