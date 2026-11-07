@@ -21,7 +21,7 @@ def drain_commands(sat_ids, t=T0):
 def imbalance(r, i):
     e = {k: v[i] for k, v in r.energy_wh.items()}
     stored = e["stored_end"] - e["stored_start"]
-    return e["array_used"] - e["load"] - stored - e["ohmic"] - e["coulombic"], e["array_used"]
+    return e["array_used"] - e["load"] - stored - e["ohmic"] - e["coulombic"] - e["capacity_loss"], e["array_used"]
 
 
 # ---------------- CLAUDE.md section 8: EPS ----------------

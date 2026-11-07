@@ -74,8 +74,8 @@ class Modifiers:
     Every field is optional and broadcast to the shape given (S sats, P panels, L loads, N steps).
     """
     array_factor: np.ndarray | None = None      # (S, P) or (S, P, N), multiplies panel output
-    capacity_factor: np.ndarray | None = None   # (S,), multiplies battery capacity
-    r0_factor: np.ndarray | None = None         # (S,), multiplies internal resistance
+    capacity_factor: np.ndarray | None = None   # (S,) or (S, N), multiplies battery capacity
+    r0_factor: np.ndarray | None = None         # (S,) or (S, N), multiplies internal resistance
     stuck_on: np.ndarray | None = None          # (S, L) or (S, L, N) bool, load stays on whatever is commanded
     extra_beta_deg: np.ndarray | None = None    # (S,) or (S, N)
     sensor_bias: dict[str, np.ndarray] = field(default_factory=dict)  # channel -> (S,) or (S, N), additive
@@ -91,9 +91,8 @@ class Modifiers:
 
         return {
             "array_factor": full(self.array_factor, 1.0, (s, p, n)).astype(float),
-            "capacity_factor": np.broadcast_to(np.asarray(1.0 if self.capacity_factor is None
-                                                          else self.capacity_factor, float), (s,)),
-            "r0_factor": np.broadcast_to(np.asarray(1.0 if self.r0_factor is None else self.r0_factor, float), (s,)),
+            "capacity_factor": full(self.capacity_factor, 1.0, (s, n)).astype(float),
+            "r0_factor": full(self.r0_factor, 1.0, (s, n)).astype(float),
             "stuck_on": full(self.stuck_on, False, (s, n_loads, n)).astype(bool),
             "extra_beta_deg": full(self.extra_beta_deg, 0.0, (s, n)).astype(float),
             "sensor_bias": {k: full(v, 0.0, (s, n)).astype(float) for k, v in self.sensor_bias.items()},
@@ -186,8 +185,9 @@ def run(
         noise[row] = rng.standard_normal((n, len(channels)))
 
     # --- per-satellite constants ---
-    cap = p.capacity_ah * cap_sp * m["capacity_factor"]
-    r25 = p.r0_ohm * m["r0_factor"]
+    cap_base = p.capacity_ah * cap_sp
+    cap_f, r0_f = m["capacity_factor"], m["r0_factor"]
+    cap = cap_base * cap_f[:, 0]
     base_w = np.array([p.load_power[name] for name in LOADS])
     load_w = base_w * load_sp
     panel_coef = p.solar_flux * p.panel_area * p.cell_efficiency * p.packing_factor * arr_sp  # (S, P)
@@ -209,6 +209,7 @@ def run(
     heater_active = temp < setpoint
     shed = np.zeros(s_n, bool)
     soc_start = soc.copy()
+    cap_start = cap.copy()
 
     rec = {k: np.empty((s_n, n)) for k in ("soc", "v_bus", "i_bat", "p_load", "p_avail", "p_used", "t_bat_c",
                                            "duty", "setpoint")}
@@ -217,7 +218,8 @@ def run(
     rec_cmd = np.empty((s_n, n_l, n), bool)
     rec_on = np.empty((s_n, n_l, n), bool)
     rec_iarr = np.empty((s_n, n_p, n))
-    e = {k: np.zeros(s_n) for k in ("array_used", "array_avail", "load", "ohmic", "coulombic", "shunt", "chemical")}
+    e = {k: np.zeros(s_n) for k in ("array_used", "array_avail", "load", "ohmic", "coulombic", "shunt", "chemical",
+                                    "capacity_loss")}
 
     sched = _schedule(env.t, env.sat_ids, commands)
 
@@ -240,10 +242,20 @@ def run(
                 duty[row] = 0.0
                 setpoint[row] = float(p.safe_heater_setpoint_c)
         sw[:, ESSENTIAL] = True
-        on = sw | m["stuck_on"][:, :, k]
+        stuck = m["stuck_on"][:, :, k]
+        on = sw | stuck
+        if k > 0 and np.any(cap_f[:, k] != cap_f[:, k - 1]):
+            # capacity lost at constant SOC (e.g. a cell string drops out): its stored energy goes with it
+            new_cap = cap_base * cap_f[:, k]
+            e["capacity_loss"] += 3600.0 * (
+                physics.stored_energy_wh(soc, cap, p.n_series, soc_grid, ocv_grid)
+                - physics.stored_energy_wh(soc, new_cap, p.n_series, soc_grid, ocv_grid))
+            cap = new_cap
+        r25 = p.r0_ohm * r0_f[:, k]
 
         heater_active = np.where(temp < setpoint - half_band, True,
                                  np.where(temp > setpoint + half_band, False, heater_active))
+        heater_active = heater_active | stuck[:, I_HEATER]   # a stuck heater relay also bypasses the thermostat
         frac = on.astype(float)
         frac[:, I_PAYLOAD] *= duty
         frac[:, I_HEATER] *= heater_active
@@ -309,7 +321,7 @@ def run(
             shed |= newly
 
     energy = {k: v / 3600.0 for k, v in e.items()}
-    energy["stored_start"] = physics.stored_energy_wh(soc_start, cap, p.n_series, soc_grid, ocv_grid)
+    energy["stored_start"] = physics.stored_energy_wh(soc_start, cap_start, p.n_series, soc_grid, ocv_grid)
     energy["stored_end"] = physics.stored_energy_wh(soc, cap, p.n_series, soc_grid, ocv_grid)
 
     truth_vals = {
