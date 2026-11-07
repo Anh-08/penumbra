@@ -5,8 +5,8 @@ minima/maxima (no time history), so the verifier can afford hundreds of Monte Ca
 
 Differences from the truth model (truth.py), on purpose:
 - Parameters come from params.PLANNING: datasheet capacity 2.0 Ah/cell (truth 1.91, PCoE), a coarse
-  7-point OCV table (truth: 21-point PCoE fit), R0 0.14 ohm/cell with no temperature dependence
-  (truth: 0.1286 ohm at 25 degC, Arrhenius), coulombic efficiency 0.99 (truth 0.982), cell efficiency
+  7-point OCV table (truth: 21-point PCoE fit), R0 0.14 ohm/cell with a 2500 K Arrhenius factor
+  (truth: 0.1286 ohm at 25 degC, 3000 K), coulombic efficiency 0.99 (truth 0.982), cell efficiency
   0.29 (truth 0.295), regulator 0.94 (truth 0.95), thermal conductance 0.5 W/K (truth 0.4). See
   params.PLANNING_DIFFERENCES. Capacity and efficiency are optimistic, array output is pessimistic.
 - No unit-to-unit spread, no sensor model and no undervoltage load shedding: a plan that only
@@ -245,14 +245,15 @@ def simulate_batch(
 
     # constants per (S, H, ., .) broadcast to the full batch
     cap = f(p.capacity_ah * hyps.capacity_factor[:, :, None, None] * pert.capacity_factor)
-    r = f(p.r0_ohm * hyps.r0_factor[:, :, None, None])
+    r0 = f(p.r0_ohm * hyps.r0_factor[:, :, None, None])
+    r = r0
     load_factor = f(pert.load_factor)
     w = np.asarray([p.load_power[name] for name in LOADS], dtype)
     panel_coef = (p.solar_flux * p.panel_area * p.cell_efficiency * p.packing_factor * p.regulator_eff
                   * hyps.array_factor)                                 # (S, H, Pn) at normal incidence, sunlit
-    beta = np.asarray(beta_deg, float)
-    beta = np.broadcast_to(beta[:, None] if beta.ndim == 1 else beta, (s_n, n))
-    cos_inc = np.cos(np.radians(beta[:, None, :] + hyps.extra_beta_deg[:, :, None]))   # (S, H, N)
+    # beta_deg is accepted for the record; power depends on beta only through illum (eclipse geometry) and
+    # on a beta drift from the design attitude (H5), as in truth.py
+    cos_inc = np.broadcast_to(np.cos(np.radians(hyps.extra_beta_deg))[:, :, None], (s_n, h_n, n))   # (S, H, N)
     sun = np.clip(cos_inc, 0, 1) * np.clip(np.asarray(illum)[:, None, :], 0, 1)
     p_sun_pan = (panel_coef[:, :, :, None] * sun[:, :, None, :]).astype(dtype)   # (S, H, Pn, N)
     p_sun = p_sun_pan.sum(axis=2)                                      # (S, H, N)
@@ -295,6 +296,8 @@ def simulate_batch(
         p_avail = p_sun[:, :, None, None, k] * array_factor
 
         voc = (p.n_series * physics.ocv_cell(soc, soc_grid, ocv_grid)).astype(dtype, copy=False)
+        if p.r_temp_b:
+            r = (r0 * physics.resistance(1.0, temp, p.r_temp_b)).astype(dtype, copy=False)
         p_b = p_demand - p_avail
         discharging = p_b > 0
         i_dis, _ = physics.current_for_power(np.maximum(p_b, 0), voc, r)

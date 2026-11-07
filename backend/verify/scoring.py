@@ -241,11 +241,15 @@ def evidence(
     bias = {ch: np.array([c.params["bias"] if c.hyp == "H4" and c.params.get("channel") == ch else 0.0
                           for c in cands]) for ch in obs}
     seg_ll = np.zeros((j_n, len(cands)))
+    taper_sigma = p.charge_current_max_a / (1.0 - p.taper_soc) * K.SOC_RESTART_SIGMA
     for j, (a, b) in enumerate(runs):
         near = slice(0, b - a)
         far = slice(runs[j + 1][0] - a, ends[j] - a) if j + 1 < j_n else None
+        near_full = soc0[j] > p.taper_soc - 0.02
         for ch, o in obs.items():
-            sg = _sigma(ch)
+            sg = dict(_sigma(ch))
+            if near_full and (ch == "i_bat" or ch.startswith("i_array_")):
+                sg = {k: float(np.hypot(v, taper_sigma)) for k, v in sg.items()}
             pred = res.channels[ch][j, :, 0, 0, :] + bias[ch][:, None]          # (K, l_max)
             ob = window(o, a)
             # near term: pass-mean residual and within-pass shape

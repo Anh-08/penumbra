@@ -1,13 +1,13 @@
 {
  "metric": "true fault ranks first after one diagnostic",
  "n_seeds": 20,
- "top1_after_diagnostic": 1.0,
- "top1_before_diagnostic": 0.8,
+ "top1_after_diagnostic": 0.95,
+ "top1_before_diagnostic": 0.7,
  "truth_in_plausible_after": 1.0,
  "target": 0.8,
- "healthy_false_alarm_rate": 0.03333333333333333,
+ "healthy_false_alarm_rate": 0.016666666666666666,
  "healthy_satellite_scores": 60,
- "runtime_s": 28.3,
+ "runtime_s": 29.4,
  "data": {
   "real": [
    "battery OCV curve, R0, coulombic efficiency and fade rate inside the truth simulator (fitted from NASA PCoE, Saha & Goebel 2007)"
@@ -130,8 +130,9 @@
    "kind": "sensor_bias",
    "pre_top": "H4",
    "post_top": "H4",
-   "post_truth_posterior": 1.0,
+   "post_truth_posterior": 0.924,
    "post_plausible": [
+    "H0",
     "H4"
    ],
    "correct_pre": true,
@@ -154,13 +155,13 @@
    "seed": 10,
    "truth": "H3",
    "kind": "capacity_fade",
-   "pre_top": "H3",
+   "pre_top": "H5",
    "post_top": "H3",
    "post_truth_posterior": 1.0,
    "post_plausible": [
     "H3"
    ],
-   "correct_pre": true,
+   "correct_pre": false,
    "correct_post": true
   },
   {
@@ -169,9 +170,10 @@
    "kind": "array_degradation",
    "pre_top": "H5",
    "post_top": "H1",
-   "post_truth_posterior": 1.0,
+   "post_truth_posterior": 0.676,
    "post_plausible": [
-    "H1"
+    "H1",
+    "H5"
    ],
    "correct_pre": false,
    "correct_post": true
@@ -193,14 +195,17 @@
    "seed": 13,
    "truth": "H5",
    "kind": "beta_season",
-   "pre_top": "H5",
-   "post_top": "H5",
-   "post_truth_posterior": 1.0,
+   "pre_top": "H0",
+   "post_top": "H0",
+   "post_truth_posterior": 0.299,
    "post_plausible": [
+    "H0",
+    "H1",
+    "H4",
     "H5"
    ],
-   "correct_pre": true,
-   "correct_post": true
+   "correct_pre": false,
+   "correct_post": false
   },
   {
    "seed": 14,
@@ -208,7 +213,7 @@
    "kind": "beta_season",
    "pre_top": "H5",
    "post_top": "H5",
-   "post_truth_posterior": 1.0,
+   "post_truth_posterior": 0.992,
    "post_plausible": [
     "H5"
    ],
@@ -247,7 +252,7 @@
    "kind": "beta_season",
    "pre_top": "H5",
    "post_top": "H5",
-   "post_truth_posterior": 1.0,
+   "post_truth_posterior": 0.997,
    "post_plausible": [
     "H5"
    ],
@@ -273,7 +278,7 @@
    "kind": "beta_season",
    "pre_top": "H5",
    "post_top": "H5",
-   "post_truth_posterior": 1.0,
+   "post_truth_posterior": 0.999,
    "post_plausible": [
     "H5"
    ],
@@ -291,9 +296,9 @@
     "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 0.715,
-    "SAT-12": 0.64,
-    "SAT-19": 0.517
+    "SAT-07": 0.693,
+    "SAT-12": 0.606,
+    "SAT-19": 0.496
    }
   },
   {
@@ -305,9 +310,9 @@
     "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 0.987,
-    "SAT-12": 0.689,
-    "SAT-19": 0.487
+    "SAT-07": 0.737,
+    "SAT-12": 0.58,
+    "SAT-19": 0.482
    }
   },
   {
@@ -319,9 +324,9 @@
     "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 0.731,
-    "SAT-12": 0.564,
-    "SAT-19": 0.452
+    "SAT-07": 0.584,
+    "SAT-12": 0.517,
+    "SAT-19": 0.386
    }
   },
   {
@@ -333,9 +338,9 @@
     "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 0.98,
-    "SAT-12": 0.759,
-    "SAT-19": 0.402
+    "SAT-07": 0.59,
+    "SAT-12": 0.436,
+    "SAT-19": 0.376
    }
   },
   {
@@ -347,9 +352,9 @@
     "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 0.604,
-    "SAT-12": 0.523,
-    "SAT-19": 0.52
+    "SAT-07": 0.617,
+    "SAT-12": 0.508,
+    "SAT-19": 0.464
    }
   },
   {
@@ -361,9 +366,9 @@
     "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 0.852,
-    "SAT-12": 0.682,
-    "SAT-19": 0.49
+    "SAT-07": 0.658,
+    "SAT-12": 0.461,
+    "SAT-19": 0.438
    }
   },
   {
@@ -375,9 +380,9 @@
     "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 0.952,
-    "SAT-12": 0.616,
-    "SAT-19": 0.472
+    "SAT-07": 0.795,
+    "SAT-12": 0.589,
+    "SAT-19": 0.421
    }
   },
   {
@@ -389,9 +394,9 @@
     "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 1.0,
-    "SAT-12": 0.628,
-    "SAT-19": 0.43
+    "SAT-07": 0.644,
+    "SAT-12": 0.558,
+    "SAT-19": 0.409
    }
   },
   {
@@ -400,12 +405,12 @@
    "tops": {
     "SAT-07": "H0",
     "SAT-12": "H0",
-    "SAT-19": "H1"
+    "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 0.714,
-    "SAT-12": 0.611,
-    "SAT-19": 0.013
+    "SAT-07": 0.704,
+    "SAT-12": 0.585,
+    "SAT-19": 0.495
    }
   },
   {
@@ -414,12 +419,12 @@
    "tops": {
     "SAT-07": "H0",
     "SAT-12": "H0",
-    "SAT-19": "H1"
+    "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 0.997,
-    "SAT-12": 0.864,
-    "SAT-19": 0.015
+    "SAT-07": 0.664,
+    "SAT-12": 0.541,
+    "SAT-19": 0.481
    }
   },
   {
@@ -431,9 +436,9 @@
     "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 0.872,
-    "SAT-12": 0.631,
-    "SAT-19": 0.539
+    "SAT-07": 0.739,
+    "SAT-12": 0.618,
+    "SAT-19": 0.477
    }
   },
   {
@@ -445,9 +450,9 @@
     "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 0.975,
-    "SAT-12": 0.59,
-    "SAT-19": 0.526
+    "SAT-07": 0.658,
+    "SAT-12": 0.588,
+    "SAT-19": 0.454
    }
   },
   {
@@ -459,9 +464,9 @@
     "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 0.937,
-    "SAT-12": 0.624,
-    "SAT-19": 0.521
+    "SAT-07": 0.751,
+    "SAT-12": 0.597,
+    "SAT-19": 0.468
    }
   },
   {
@@ -473,9 +478,9 @@
     "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 0.99,
-    "SAT-12": 0.563,
-    "SAT-19": 0.478
+    "SAT-07": 0.637,
+    "SAT-12": 0.552,
+    "SAT-19": 0.438
    }
   },
   {
@@ -487,9 +492,9 @@
     "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 0.522,
-    "SAT-12": 0.598,
-    "SAT-19": 0.471
+    "SAT-07": 0.564,
+    "SAT-12": 0.57,
+    "SAT-19": 0.445
    }
   },
   {
@@ -501,9 +506,9 @@
     "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 0.576,
-    "SAT-12": 0.555,
-    "SAT-19": 0.434
+    "SAT-07": 0.583,
+    "SAT-12": 0.516,
+    "SAT-19": 0.416
    }
   },
   {
@@ -515,9 +520,9 @@
     "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 0.456,
-    "SAT-12": 0.449,
-    "SAT-19": 0.541
+    "SAT-07": 0.588,
+    "SAT-12": 0.393,
+    "SAT-19": 0.455
    }
   },
   {
@@ -525,13 +530,13 @@
    "beta_deg": 35.0,
    "tops": {
     "SAT-07": "H0",
-    "SAT-12": "H0",
+    "SAT-12": "H3",
     "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 0.466,
-    "SAT-12": 0.456,
-    "SAT-19": 0.502
+    "SAT-07": 0.588,
+    "SAT-12": 0.317,
+    "SAT-19": 0.421
    }
   },
   {
@@ -543,9 +548,9 @@
     "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 0.804,
-    "SAT-12": 0.643,
-    "SAT-19": 0.514
+    "SAT-07": 0.623,
+    "SAT-12": 0.609,
+    "SAT-19": 0.426
    }
   },
   {
@@ -557,18 +562,20 @@
     "SAT-19": "H0"
    },
    "p_h0": {
-    "SAT-07": 0.901,
-    "SAT-12": 0.721,
-    "SAT-19": 0.484
+    "SAT-07": 0.679,
+    "SAT-12": 0.592,
+    "SAT-19": 0.417
    }
   }
  ],
  "held_out": {
   "note": "seeds 20-59 and healthy seeds 10-29 x beta 5/20/35, never used for tuning",
-  "top1_after_diagnostic": 1.0,
-  "top1_before_diagnostic": 0.9,
+  "top1_after_diagnostic": 0.8,
+  "top1_before_diagnostic": 0.7,
   "n_seeds": 40,
-  "healthy_false_alarm_rate": 0.022,
-  "healthy_satellite_scores": 180
- }
+  "healthy_false_alarm_rate": 0.011,
+  "healthy_satellite_scores": 180,
+  "misses": "8 of 40, all at the mild end of the seeded ranges: one-panel array loss 0.10-0.16 (5-8 % of total power) scored nominal; both-panel loss 0.10-0.21 scored as beta season; a 21 deg beta season and a 0.26 V bus-voltage bias scored nominal. These sit inside the +-3 % array tolerance that H0 carries or are indistinguishable from a fleet-wide drift."
+ },
+ "note": "Recomputed after the T22 real-orbit fixes (incidence relative to each orbit's design beta, temperature-dependent planning R0, taper restart uncertainty). Before them: 20/20 and held-out 40/40 on the old physics."
 }

@@ -84,7 +84,8 @@ def test_satellite_independent_of_fleet_and_horizon():
 
 
 def test_essential_loads_never_off():
-    env = synthetic.environment(FLEET, hours=12, beta_deg=75.0, in_contact_all=True)
+    env = synthetic.environment(FLEET, hours=12, in_contact_all=True)
+    env.illum = np.where(env.t[None, :] < T0 + 4 * 3600, env.illum, 0.0)   # sun lost after 4 h: drain and shed
     cmds = drain_commands(FLEET)
     cmds["SAT-19"].append(cmd(T0 + 7200, "SAFE_MODE"))
     r = truth.run(env, cmds, seed=9, soc0=0.3)
@@ -172,11 +173,16 @@ def test_no_charging_below_min_temperature():
     assert r.energy_wh["shunt"][0] > 0
 
 
-def test_array_power_follows_beta_and_degradation():
+def test_array_power_follows_beta_drift_and_degradation():
     env = synthetic.environment(("SAT-01", "SAT-02"), hours=2, beta_deg=[0.0, 60.0], in_contact_all=True)
     env.illum = np.ones_like(env.illum)
     r = truth.run(env, seed=0, params=EpsParams(spread_array=0.0))
-    ratio = r.p_array_avail[1].mean() / r.p_array_avail[0].mean()
+    # wings are set up for each orbit's beta: in full sun, the orbit's own beta costs nothing...
+    assert r.p_array_avail[1].mean() == pytest.approx(r.p_array_avail[0].mean(), rel=1e-6)
+    # ...a drift from the design beta does
+    drift = truth.run(env, seed=0, params=EpsParams(spread_array=0.0),
+                      mods=truth.Modifiers(extra_beta_deg=np.array([0.0, 60.0])))
+    ratio = drift.p_array_avail[1].mean() / drift.p_array_avail[0].mean()
     assert ratio == pytest.approx(np.cos(np.radians(60.0)), rel=1e-6)
 
     mods = truth.Modifiers(array_factor=np.array([[0.5, 1.0], [1.0, 1.0]]))

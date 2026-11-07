@@ -131,7 +131,7 @@ def test_beta_season_is_fleet_wide():
     k = k_onset(env)
     lit = env.illum[:, k:] > 0.99
     ratio = bad.p_array_avail[:, k:][lit] / nom.p_array_avail[:, k:][lit]
-    assert np.allclose(ratio, np.cos(np.radians(40.0)) / np.cos(np.radians(10.0)))
+    assert np.allclose(ratio, np.cos(np.radians(30.0)))   # a 30 deg drift from the design attitude
 
 
 # ---------------- validation, seeds, secrecy ----------------

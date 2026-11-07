@@ -191,7 +191,8 @@ def run(
     base_w = np.array([p.load_power[name] for name in LOADS])
     load_w = base_w * load_sp
     panel_coef = p.solar_flux * p.panel_area * p.cell_efficiency * p.packing_factor * arr_sp  # (S, P)
-    cos_inc = np.cos(np.radians(env.beta_deg + m["extra_beta_deg"]))
+    # nominal incidence is 1 at the orbit's own beta (params.incidence_model); only a drift costs power
+    cos_inc = np.cos(np.radians(m["extra_beta_deg"]))
     soc_grid = np.asarray(p.soc_grid, float)
     ocv_grid = np.asarray(p.ocv_cell_v, float)
     t_sink = p.sink_eclipse_c + (p.sink_sun_c - p.sink_eclipse_c) * env.illum
