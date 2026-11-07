@@ -3,7 +3,10 @@
 `GeminiModel` implements `model.Model` on top of the google-genai SDK:
 - the model name comes from `GEMINI_MODEL` and must be a pinned version (no `-latest` alias);
 - the key comes from `GEMINI_API_KEY` and is never logged or put in an error message;
-- 429 and 5xx (and transport errors) are retried with exponential backoff and jitter; other errors raise;
+- 429 and 5xx (and transport errors) are retried with exponential backoff and jitter; other errors raise.
+  A 429 that says when to retry (RetryInfo.retryDelay, or a Retry-After header) waits at least that long, up to
+  MAX_RETRY_AFTER_S. A longer suggested wait gets one capped wait (the free tier has reported hours for a block
+  that cleared in a minute); if the server asks for a long wait again, it fails instead of hanging the demo;
 - each response carries `tokens` (total token count), which the loop writes to the flight recorder.
 
 The SDK's own retries are switched off, so this class owns the retry policy and tests can drive it with a fake
@@ -29,6 +32,7 @@ RETRY_STATUS = frozenset({429}) | frozenset(range(500, 600))
 MAX_ATTEMPTS = 5  # including the first call
 BASE_DELAY_S = 1.0
 MAX_DELAY_S = 20.0
+MAX_RETRY_AFTER_S = 65.0  # free tier is per minute (5 requests/min for gemini-3.6-flash): one window at most
 TIMEOUT_MS = 60_000
 
 # Placeholder for function-call parts that were not produced in this process (Gemini 3 thought signatures).
@@ -83,6 +87,7 @@ class GeminiModel:
         max_attempts: int = MAX_ATTEMPTS,
         base_delay_s: float = BASE_DELAY_S,
         max_delay_s: float = MAX_DELAY_S,
+        max_retry_after_s: float = MAX_RETRY_AFTER_S,
         sleeper: Callable[[float], None] = time.sleep,
         jitter: Callable[[], float] = random.random,
     ) -> None:
@@ -95,6 +100,7 @@ class GeminiModel:
         self.max_attempts = max(1, int(max_attempts))
         self.base_delay_s = base_delay_s
         self.max_delay_s = max_delay_s
+        self.max_retry_after_s = max_retry_after_s
         self._sleep = sleeper
         self._jitter = jitter
         self._raw: dict[tuple[str, ...], Any] = {}  # tool-call ids of a turn -> the Content Gemini returned
@@ -120,7 +126,9 @@ class GeminiModel:
 
         status: int | None = None
         reason = ""
+        long_wait_used = False
         for attempt in range(1, self.max_attempts + 1):
+            wait = self.backoff_s(attempt)
             try:
                 raw = self._client.models.generate_content(model=self.name, contents=contents, config=config)
             except Exception as exc:  # noqa: BLE001 - classified below, re-raised if not retryable
@@ -128,13 +136,24 @@ class GeminiModel:
                 if not _retryable(exc, status):
                     raise
                 reason = f"HTTP {status}" if status else type(exc).__name__
+                after = _retry_after_s(exc)
+                if after is not None:
+                    if after > self.max_retry_after_s:
+                        if long_wait_used:
+                            raise GeminiUnavailable(
+                                f"Gemini {self.name}: {reason}, server asks to retry in {after:.0f} s (quota)",
+                                attempts=attempt,
+                                status=status,
+                            ) from exc
+                        long_wait_used, after = True, self.max_retry_after_s
+                    wait = max(wait, after + self._jitter())
             else:
                 parsed = self._parse(raw, turn, attempt)
                 if parsed is not None:
                     return parsed
                 status, reason = None, f"empty or malformed response ({_finish_reason(raw)})"
             if attempt < self.max_attempts:
-                self._sleep(self.backoff_s(attempt))
+                self._sleep(wait)
         raise GeminiUnavailable(
             f"Gemini {self.name} failed after {self.max_attempts} attempts: {reason}",
             attempts=self.max_attempts,
@@ -262,6 +281,23 @@ def _status(exc: Exception) -> int | None:
     response = getattr(exc, "response", None)
     code = getattr(response, "status_code", None)
     return code if isinstance(code, int) else None
+
+
+def _retry_after_s(exc: Exception) -> float | None:
+    """Server-suggested wait: google.rpc.RetryInfo.retryDelay ("22s") in the error body, else Retry-After."""
+    body = getattr(exc, "details", None)
+    error = body.get("error") if isinstance(body, Mapping) else None
+    for item in (error.get("details") or []) if isinstance(error, Mapping) else []:
+        if isinstance(item, Mapping) and str(item.get("@type", "")).endswith("RetryInfo"):
+            m = re.fullmatch(r"\s*([0-9]+(?:\.[0-9]+)?)s\s*", str(item.get("retryDelay", "")))
+            if m:
+                return float(m.group(1))
+    headers = getattr(getattr(exc, "response", None), "headers", None)
+    value = headers.get("retry-after") if headers is not None and hasattr(headers, "get") else None
+    try:
+        return float(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None  # an HTTP-date Retry-After: fall back to backoff
 
 
 def _retryable(exc: Exception, status: int | None) -> bool:
