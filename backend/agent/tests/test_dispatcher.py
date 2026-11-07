@@ -158,7 +158,7 @@ def test_request_approval_only_for_verified_plans(d):
     sim = call(d, "simulate", plan_id="P-2")
     assert sim["passes_all"] is True
     r = call(d, "request_approval", plan_id="P-2")
-    assert r == {"approval_id": "AP-1", "tier": 2}
+    assert r == {"approval_id": "AP-1", "plan_id": "P-2", "tier": 2, "status": "awaiting_approval"}
     ticket = d.approvals["AP-1"]
     assert isinstance(ticket, c.ApprovalRequestMsg)
     assert (ticket.plan_id, ticket.plan_hash, ticket.sim_id) == ("P-2", sim["plan_hash"], sim["sim_id"])

@@ -94,6 +94,8 @@ def run_agent(
                 {"id": call.id, "name": call.name, "result": outcome.result},
                 plan_hash=outcome.plan_hash,
             )
+            for kind, payload in outcome.events:  # e.g. the execution of a Tier 1 plan
+                rec.record(kind, payload, plan_hash=outcome.plan_hash)
             results.append(ToolResult(name=call.name, result=outcome.result, id=call.id))
         messages.append(Message(role="tool", tool_results=tuple(results)))
 

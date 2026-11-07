@@ -36,15 +36,19 @@ def test_stub_runs_all_phases_in_order():
     run, d = stub_run()
     assert run.status == "done"
     assert run.steps <= MAX_STEPS
-    names = [tc.name for tc in run.tool_calls]
+    # The diagnostic test (T20) is part of Diagnose; the phase order is checked on the recovery plan's calls.
+    diagnostics = {pid for pid, p in d.plans.items() if p.kind == "diagnostic"}
+    names = [tc.name for tc in run.tool_calls if tc.args.get("plan_id") not in diagnostics
+             and tc.name != "propose_diagnostic_test"]
     firsts = [names.index(tool) for _, tool in PHASES]
     assert firsts == sorted(firsts), names
 
 
 def test_stub_approves_the_plan_that_passed_verification():
     run, d = stub_run()
-    assert len(d.approvals) == 1
-    ticket = next(iter(d.approvals.values()))
+    tickets = [t for t in d.approvals.values() if d.plans[t.plan_id].kind == "plan"]
+    assert len(tickets) == 1
+    ticket = tickets[0]
     assert ticket.sat_id == MOCK_SAT
     assert d.sims[ticket.plan_id].passes_all
     failing = [pid for pid, sim in d.sims.items() if not sim.passes_all]

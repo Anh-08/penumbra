@@ -103,8 +103,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     ),
     _tool(
         "propose_diagnostic_test",
-        "Register a short diagnostic command sequence (for example LOAD_OFF of a suspect load) for the next "
-        "contact. Returns {plan_id} or {error}. It must still be simulated before uplink.",
+        "Register a short diagnostic test for the current or next pass, for example LOAD_OFF of a suspect load "
+        "then cycling the payload. Give the steps in order without t_exec: they run one dwell apart and the test "
+        "must end inside the pass. Returns {plan_id} or {error}. Simulate, schedule and request_approval it like "
+        "a plan; after it has run, call score_hypotheses again before proposing a plan.",
         {"sat_id": _SAT_ID, "commands": _COMMANDS},
         ["sat_id", "commands"],
     ),
@@ -145,8 +147,9 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     ),
     _tool(
         "request_approval",
-        "Ask for execution of a verified plan. Returns {approval_id, tier}: tier 1 auto-executes under a flight "
-        "rule, tier 2 waits for the human Flight Director. A plan that failed verification is refused.",
+        "Ask for execution of a verified plan. Returns {approval_id, plan_id, tier, status}: tier 1 runs at once "
+        "under a flight rule (status auto_executed, with flight_rule), tier 2 waits for the human Flight Director "
+        "(status awaiting_approval). A plan that failed verification is refused.",
         {"plan_id": _PLAN_ID},
         ["plan_id"],
     ),
