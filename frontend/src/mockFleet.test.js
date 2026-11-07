@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildFleetState, orbitTrack, STATIONS } from './mockFleet.js';
+import { buildFleetState, markerAlpha, orbitTrack, STATIONS } from './mockFleet.js';
 
 test('preview fleet follows the fleet_state shape with 24 anonymous satellites', () => {
   const state = buildFleetState(1_799_999_000, 120);
@@ -30,4 +30,14 @@ test('each orbit track spans one future orbit and moves across the Earth', () =>
 
 test('station coordinates use only the three contracted names', () => {
   assert.deepEqual(STATIONS.map(({ id }) => id), ['SVALBARD', 'TROLL', 'FAIRBANKS']);
+});
+
+test('the preview enters penumbra and marker opacity fades continuously with illumination', () => {
+  const partial = Array.from({ length: 570 }, (_, index) => buildFleetState(1_800_000_000 + index * 10))
+    .flatMap(({ sats }) => sats)
+    .filter(({ illum }) => illum > 0.05 && illum < 0.95);
+  assert.ok(partial.length > 0, 'preview should show nonzero penumbra intervals');
+  const alphas = [0, 0.1, 0.25, 0.5, 0.75, 0.9, 1].map(markerAlpha);
+  assert.ok(alphas.every((alpha, index) => index === 0 || alpha >= alphas[index - 1]));
+  assert.ok(alphas[0] < alphas.at(-1));
 });

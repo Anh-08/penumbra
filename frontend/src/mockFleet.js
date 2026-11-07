@@ -15,6 +15,10 @@ export const STATIONS = Object.freeze([
 const clamp = (value, lo, hi) => Math.min(hi, Math.max(lo, value));
 const wrapLon = (degrees) => ((degrees + 540) % 360) - 180;
 
+export function markerAlpha(illum) {
+  return clamp(0.4 + 0.6 * illum, 0.4, 1);
+}
+
 export function sunDirection(t) {
   // A moving, unit-length ECEF direction for the offline preview.
   const dayAngle = 2 * Math.PI * (t % EARTH_DAY_SECONDS) / EARTH_DAY_SECONDS;

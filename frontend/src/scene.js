@@ -14,7 +14,7 @@ import {
   Viewer,
   buildModuleUrl,
 } from 'cesium';
-import { orbitTrack, STATIONS } from './mockFleet.js';
+import { markerAlpha, orbitTrack, STATIONS } from './mockFleet.js';
 
 const EARTH_RADIUS_M = 6_371_000;
 const SHADOW_LENGTH_M = 15_000_000;
@@ -23,9 +23,9 @@ const amber = Color.fromCssColorString('#f6ad58');
 const red = Color.fromCssColorString('#f26f75');
 
 function colorFor(sat) {
-  if (sat.illum < 0.05) return red.withAlpha(0.43);
-  if (sat.illum < 0.95) return amber.withAlpha(0.52 + sat.illum * 0.4);
-  return teal;
+  if (sat.illum < 0.05) return red.withAlpha(markerAlpha(sat.illum));
+  if (sat.illum < 0.95) return amber.withAlpha(markerAlpha(sat.illum));
+  return teal.withAlpha(markerAlpha(sat.illum));
 }
 
 function orientationFor(direction) {
@@ -77,7 +77,7 @@ function addStations(viewer) {
 }
 
 function addShadow(viewer) {
-  const makeVolume = (name, radius, opacity) => viewer.entities.add({
+  const makeVolume = (name, radius, opacity, outlineAlpha) => viewer.entities.add({
     name,
     position: Cartesian3.ZERO,
     cylinder: {
@@ -86,13 +86,13 @@ function addShadow(viewer) {
       bottomRadius: radius,
       material: Color.fromCssColorString('#050914').withAlpha(opacity),
       outline: true,
-      outlineColor: Color.fromCssColorString('#8c89c7').withAlpha(opacity * 1.5),
+      outlineColor: Color.fromCssColorString('#b6a8ed').withAlpha(outlineAlpha),
       numberOfVerticalLines: 12,
     },
   });
   return {
-    umbra: makeVolume('Earth umbra', EARTH_RADIUS_M, 0.18),
-    penumbra: makeVolume('Penumbra boundary', EARTH_RADIUS_M + 240_000, 0.045),
+    umbra: makeVolume('Earth umbra', EARTH_RADIUS_M, 0.27, 0.4),
+    penumbra: makeVolume('Penumbra boundary', EARTH_RADIUS_M + 240_000, 0.1, 0.3),
   };
 }
 
