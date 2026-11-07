@@ -101,6 +101,6 @@ At 1366x768 (laptop fallback, ~1 m) the tiers drop to 34 / 22 / 17 / 15 / 13 (in
 - Connection lost: badge `RECONNECTING · showing last state` (T35).
 
 ## Figma
-- File: https://www.figma.com/design/OziLf553hzjCix8BTvl5m0 (team "truyenan's team", not inside a project folder; move it there if needed).
+- File: https://www.figma.com/design/YhUqkSKyObJtJ4ehkTsrDc (in the team project folder https://www.figma.com/files/folder/686270663).
 - Node `1:2` has three frames captured from `mock/index.html`: 1920x1080 agent state, 1920x1080 approval with the overlay open, and 1366x768 with a refused approval. The globe is an SVG placeholder. All values are samples.
 - To re-import by hand: serve `docs/design/` (`python3 -m http.server 8765` from that folder), open `http://127.0.0.1:8765/mock/index.html` and import the URL with the html.to.design plugin.
