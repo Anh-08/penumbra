@@ -157,6 +157,8 @@ def test_request_approval_only_for_verified_plans(d):
     call(d, "propose_plan", sat_id=MOCK_SAT, commands=SHED)
     sim = call(d, "simulate", plan_id="P-2")
     assert sim["passes_all"] is True
+    assert "schedule_uplink" in call(d, "request_approval", plan_id="P-2")["error"]  # no uplink slot yet
+    call(d, "schedule_uplink", plan_id="P-2")
     r = call(d, "request_approval", plan_id="P-2")
     assert r == {"approval_id": "AP-1", "plan_id": "P-2", "tier": 2, "status": "awaiting_approval"}
     ticket = d.approvals["AP-1"]

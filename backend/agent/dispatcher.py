@@ -9,6 +9,10 @@ Diagnostic tests (T20): `propose_diagnostic_test` time-tags untagged steps one D
 the pass. A Tier 1 plan (pre-approved flight rule) executes as soon as `request_approval` is called. After a
 diagnostic executes, `propose_plan` for that satellite is refused until `score_hypotheses` has been called
 again, so every plan is built on the diagnostic's evidence.
+
+Station conflicts (T26): `schedule_uplink` re-solves every pending request together. If the plan gets no slot,
+its contact is marked blocked for that satellite and the next proposal targets the following contact. Plans
+that lost the slot they had are reported as `bumped` (and in `self.bumped`). `request_approval` needs a slot.
 """
 from __future__ import annotations
 
@@ -72,6 +76,10 @@ class Dispatcher:
         self._executed: set[str] = set()
         self._flight_rules: dict[str, str | None] = {}  # approval_id -> flight rule id (Tier 1)
         self._needs_rescore: dict[str, str] = {}  # sat_id -> diagnostic plan_id executed since the last score
+        self._blocked: dict[str, set[tuple[str, float]]] = {}  # sat_id -> (station_id, aos) with no free slot
+        self.bumped: set[str] = set()  # plan_ids that lost their uplink slot to another plan
+        self._executed_plans: set[str] = set()
+        self._fixed: dict[str, Assignment] = {}  # booked slots of executed plans: never moved, never given away
         self._schedule_requests: dict[str, ScheduleRequest] = {}
         self._schemas = {s["name"]: s["parameters"] for s in TOOL_SCHEMAS}
         self._handlers = {name: getattr(self, f"_tool_{name}") for name in AGENT_TOOLS}
@@ -142,6 +150,8 @@ class Dispatcher:
                 raise SafetyError("stale_hash", f"hash does not match the latest verified version of {plan.plan_id}")
             safety.check_plan(plan, self.backend.contacts(), now=self.backend.now())
             slot = self.assignments.get(plan.plan_id)
+            if slot is None and plan.plan_id in self._schedule_requests:
+                raise SafetyError("uplink_closed", f"{plan.plan_id} has no uplink slot (it lost it to another plan)")
             if slot is not None and self.backend.now() >= slot.end_t:
                 raise SafetyError("uplink_closed", f"the scheduled uplink for {plan.plan_id} has passed")
         except SafetyError as exc:
@@ -211,6 +221,7 @@ class Dispatcher:
         self._needs_rescore.pop(sat_id, None)
         return ToolOutcome(
             {
+                "sat_id": sat_id,
                 "scores": scores.scores,
                 "plausible": scores.plausible,
                 "labels": {h: HYPOTHESIS_LABELS[h] for h in scores.scores},
@@ -245,6 +256,7 @@ class Dispatcher:
             duration_s=UPLINK_DURATION_S,
         )
         # Re-solve with every pending request so station conflicts between satellites are resolved together.
+        # Executed plans are not re-solved: their slots stay fixed, and a new slot that overlaps one is refused.
         result = self.backend.schedule(list(self._schedule_requests.values()))
         contacts = self.backend.contacts()
         for a in result.assignments:  # the scheduler is checked too: every slot must be inside a contact
@@ -253,11 +265,30 @@ class Dispatcher:
                 raise RuntimeError(f"scheduler returned unknown plan {a.plan_id}")
             safety.check_assignment(a, req.sat_id, contacts)
         self.last_schedule = result
-        self.assignments = {a.plan_id: a for a in result.assignments}
+        now = self.backend.now()
+        fixed = {p: a for p, a in self._fixed.items() if a.end_t > now}
+        before = set(self.assignments)
+        self.assignments = dict(fixed)
+        self.assignments.update(
+            (a.plan_id, a) for a in result.assignments if not any(_overlap(a, f) for f in fixed.values())
+        )
+        bumped = sorted(p for p in before - set(self.assignments)
+                        if p != plan.plan_id and p not in self._executed_plans)
+        self.bumped.update(bumped)
+        self.bumped -= set(self.assignments)
         mine = self.assignments.get(plan.plan_id)
         out: dict[str, Any] = {"plan_id": plan.plan_id, "scheduled": mine is not None, "solver": result.solver}
         if mine is not None:
             out.update(station_id=mine.station_id, start_t=mine.start_t, end_t=mine.end_t)
+        else:
+            self._schedule_requests.pop(plan.plan_id, None)  # stop competing for a contact it cannot get
+            self._blocked.setdefault(plan.sat_id, set()).add((plan.uplink.station_id, plan.uplink.aos))
+            out["reason"] = (
+                f"no station is free for {plan.plan_id} in its {plan.uplink.station_id} contact (another plan has "
+                "priority); propose the same commands again to target the next contact, then simulate and schedule"
+            )
+        if bumped:
+            out["bumped"] = bumped
         return ToolOutcome(out, plan.plan_hash)
 
     def _tool_request_approval(self, plan_id: Any) -> ToolOutcome:
@@ -265,6 +296,8 @@ class Dispatcher:
         sim = self.sims[plan.plan_id]
         if plan.kind == "plan" and plan.sat_id in self._needs_rescore:
             raise ToolArgError(_rescore_message(plan.sat_id, self._needs_rescore[plan.sat_id]))
+        if plan.plan_id not in self.assignments:
+            raise ToolArgError(f"{plan.plan_id} has no uplink slot; call schedule_uplink first")
         tier, flight_rule = self.backend.tier(plan, sim)
         approval_id = f"AP-{len(self.approvals) + 1}"
         self.approvals[approval_id] = ApprovalRequestMsg(
@@ -294,7 +327,7 @@ class Dispatcher:
         if kind == "plan" and sat_id in self._needs_rescore:
             raise ToolArgError(_rescore_message(sat_id, self._needs_rescore[sat_id]))
         now = self.backend.now()
-        uplink = self.backend.next_contact(sat_id, now)
+        uplink = self._next_uplink(sat_id, now)
         if uplink is None:
             raise ToolArgError(f"{sat_id} has no contact window left in the horizon")
         start = max(uplink.aos, now)  # never time-tag a command in the past, even when the pass is in progress
@@ -310,6 +343,17 @@ class Dispatcher:
         safety.check_plan(plan, self.backend.contacts(), now=now)
         self.plans[plan_id] = plan
         return ToolOutcome({"plan_id": plan_id}, plan.plan_hash)
+
+    def _next_uplink(self, sat_id: str, now: float) -> Any:
+        """Next contact for the uplink, skipping contacts where this satellite could not get a station."""
+        blocked = self._blocked.get(sat_id, set())
+        t = now
+        for _ in range(50):
+            c = self.backend.next_contact(sat_id, t)
+            if c is None or (c.station_id, c.aos) not in blocked:
+                return c
+            t = max(t, c.los) + 1.0
+        return None
 
     def _diagnostic_steps(self, commands: list[Any], start: float, uplink: Any) -> list[Any]:
         """Untagged steps run one DIAGNOSTIC_STEP_S apart, after one step of lead time for the uplink; the test,
@@ -331,7 +375,10 @@ class Dispatcher:
         plan = self.plans[ticket.plan_id]
         t_done = float(self.backend.execute(plan))
         self._executed.add(approval_id)
-        self._schedule_requests.pop(plan.plan_id, None)  # its uplink happened; stop re-solving for it
+        self._executed_plans.add(plan.plan_id)
+        self._schedule_requests.pop(plan.plan_id, None)
+        if plan.plan_id in self.assignments:  # keep the station booked for this uplink: no other plan may take it
+            self._fixed[plan.plan_id] = self.assignments[plan.plan_id]
         if plan.kind == "diagnostic":
             self._needs_rescore[plan.sat_id] = plan.plan_id
         return {
@@ -368,10 +415,18 @@ class Dispatcher:
         return plan
 
     def _priority(self, sat_id: str) -> float:
-        return next((e.priority for e in self.backend.triage() if e.sat_id == sat_id), 0.0)
+        """Scheduler weight (higher = more important, backend/sched) from the triage rank (1 = most urgent)."""
+        rank = next((e.priority for e in self.backend.triage() if e.sat_id == sat_id), None)
+        if rank is None:
+            return 0.01  # not in the triage queue: lowest weight
+        return 1.0 / rank if rank >= 1.0 else 1.0
 
 
 # ---------------------------------------------------------------------- arg parsing
+def _overlap(a: Assignment, b: Assignment) -> bool:
+    return a.station_id == b.station_id and a.start_t < b.end_t and b.start_t < a.end_t
+
+
 def _uplink_deadline(plan: Plan) -> float:
     """A diagnostic must be uplinked before its first step; a plan any time inside its contact."""
     if plan.kind == "diagnostic":

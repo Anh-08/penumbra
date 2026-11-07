@@ -3,6 +3,7 @@
     python -m backend.agent                 # stub model, or the recorded run named by PENUMBRA_REPLAY
     python -m backend.agent --live          # Gemini (GEMINI_MODEL, GEMINI_API_KEY); always writes runs/<id>.jsonl
     python -m backend.agent --record        # also write runs/<id>.jsonl for a stub or replay run
+    python -m backend.agent --fleet         # fleet mode on the SIMULATED storm (3 satellites), until T27's scenario
 """
 from __future__ import annotations
 
@@ -11,8 +12,10 @@ import json
 
 from .dispatcher import Dispatcher
 from .interfaces import ListRecorder
+from .fleet import run_fleet
 from .loop import run_agent
 from .mock_backend import MockBackend
+from .mock_fleet import MockStormBackend
 from .session import model_kind, record_run, select_model
 
 
@@ -32,16 +35,18 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--record", action="store_true", help="write runs/<run_id>.jsonl for a non-live run too")
     ap.add_argument("--run-id", help="flight-recorder run id (default: <kind>-<UTC time>-<random>)")
     ap.add_argument("--runs-dir", default="runs", help="directory for the JSONL flight record")
+    ap.add_argument("--fleet", action="store_true", help="work the triage queue of the SIMULATED fault storm")
     args = ap.parse_args(argv)
 
     model = select_model(live=args.live)
-    dispatcher = Dispatcher(MockBackend())
+    dispatcher = Dispatcher(MockStormBackend() if args.fleet else MockBackend())
     if args.live or args.record:
-        rec = record_run(model, dispatcher, run_id=args.run_id, runs_dir=args.runs_dir, on_event=_print_event)
+        rec = record_run(model, dispatcher, run_id=args.run_id, runs_dir=args.runs_dir, on_event=_print_event,
+                         fleet=args.fleet)
         run, where = rec.run, f"\nrecorded: {rec.path}"
     else:
         recorder = ListRecorder(run_id=args.run_id or f"{model_kind(model)}-demo")
-        run = run_agent(model, dispatcher, recorder)
+        run = run_fleet(model, dispatcher, recorder) if args.fleet else run_agent(model, dispatcher, recorder)
         for e in recorder.events:
             _print_event(e)
         where = ""
