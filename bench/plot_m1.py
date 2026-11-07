@@ -38,10 +38,11 @@ def render_plot(result: dict, path: Path = ROOT / "bench/results/m1.png") -> Pat
     battery.grid(alpha=0.2)
     battery.legend(loc="lower left", frameon=False, fontsize=9)
     battery.text(
-        0.02, 0.05,
+        0.56, 0.93,
         f"Endpoint gap: {capacity['endpoint_abs_gap']:.3f}",
         transform=battery.transAxes,
         fontsize=9,
+        va="top",
         bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "edgecolor": "#dddddd"},
     )
 
