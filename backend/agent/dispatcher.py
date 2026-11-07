@@ -10,6 +10,9 @@ the pass. A Tier 1 plan (pre-approved flight rule) executes as soon as `request_
 diagnostic executes, `propose_plan` for that satellite is refused until `score_hypotheses` has been called
 again, so every plan is built on the diagnostic's evidence.
 
+Infeasible (T26): after MAX_FAILED_PLANS failed plans for a satellite, only a SAFE_MODE plan may still be
+proposed, and simulate results say so; if the backend offers rank(sat_id), they also carry its status.
+
 Station conflicts (T26): `schedule_uplink` re-solves every pending request together. If the plan gets no slot,
 its contact is marked blocked for that satellite and the next proposal targets the following contact. Plans
 that lost the slot they had are reported as `bumped` (and in `self.bumped`). `request_approval` needs a slot.
@@ -48,6 +51,7 @@ TELEMETRY_WINDOW_S = 3 * 3600.0  # default get_telemetry window, ending now
 MAX_TELEMETRY_POINTS = 120  # keep tool results small for the model
 UPLINK_DURATION_S = 60.0  # station time requested per plan uplink
 DIAGNOSTIC_STEP_S = DWELL_S  # dwell per diagnostic step, same as backend.verify.diagnostics
+MAX_FAILED_PLANS = 4  # failed non-SAFE_MODE plans per satellite before the search stops (infeasible)
 
 
 class ToolArgError(ValueError):
@@ -244,7 +248,19 @@ class Dispatcher:
         if sim.plan_id != plan.plan_id or sim.plan_hash != safety.plan_hash(plan):
             raise RuntimeError(f"verifier returned a result for another plan ({sim.plan_id})")
         self.record_sim(sim)
-        return ToolOutcome(sim.model_dump(), sim.plan_hash)
+        out = sim.model_dump()
+        rank = getattr(self.backend, "rank", None)
+        status = None
+        if callable(rank):
+            try:
+                status = getattr(rank(plan.sat_id), "status", None)
+            except (ValueError, LookupError):
+                status = None
+        if status is not None:
+            out["rank_status"] = status
+        if status == "infeasible" or self._failed_plans(plan.sat_id) >= MAX_FAILED_PLANS:
+            out["hint"] = _infeasible_hint(plan.sat_id, self._failed_plans(plan.sat_id))
+        return ToolOutcome(out, plan.plan_hash)
 
     def _tool_schedule_uplink(self, plan_id: Any) -> ToolOutcome:
         plan = self._verified(plan_id)
@@ -326,6 +342,9 @@ class Dispatcher:
             raise ToolArgError("commands must be a non-empty list")
         if kind == "plan" and sat_id in self._needs_rescore:
             raise ToolArgError(_rescore_message(sat_id, self._needs_rescore[sat_id]))
+        safe = any(isinstance(c, Mapping) and c.get("name") == "SAFE_MODE" for c in commands)
+        if kind == "plan" and not safe and self._failed_plans(sat_id) >= MAX_FAILED_PLANS:
+            raise ToolArgError(_infeasible_hint(sat_id, self._failed_plans(sat_id)))
         now = self.backend.now()
         uplink = self._next_uplink(sat_id, now)
         if uplink is None:
@@ -343,6 +362,14 @@ class Dispatcher:
         safety.check_plan(plan, self.backend.contacts(), now=now)
         self.plans[plan_id] = plan
         return ToolOutcome({"plan_id": plan_id}, plan.plan_hash)
+
+    def _failed_plans(self, sat_id: str) -> int:
+        """Recovery plans (not SAFE_MODE, not diagnostics) for this satellite whose latest simulation failed."""
+        return sum(
+            1 for pid, sim in self.sims.items()
+            if not sim.passes_all and self.plans[pid].sat_id == sat_id and self.plans[pid].kind == "plan"
+            and not any(c.name == "SAFE_MODE" for c in self.plans[pid].commands)
+        )
 
     def _next_uplink(self, sat_id: str, now: float) -> Any:
         """Next contact for the uplink, skipping contacts where this satellite could not get a station."""
@@ -432,6 +459,12 @@ def _uplink_deadline(plan: Plan) -> float:
     if plan.kind == "diagnostic":
         return min(plan.uplink.los, min(c.t_exec for c in plan.commands))
     return plan.uplink.los
+
+
+def _infeasible_hint(sat_id: str, n_failed: int) -> str:
+    return (f"{n_failed} recovery plans for {sat_id} failed verification: stop searching. The situation is "
+            f"infeasible: propose SAFE_MODE for {sat_id} if you have not, simulate, schedule it, request approval, "
+            "and say it is infeasible and that you recommend SAFE_MODE.")
 
 
 def _rescore_message(sat_id: str, plan_id: str) -> str:

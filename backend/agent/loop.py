@@ -17,7 +17,7 @@ from contracts import MAX_NARRATION_RETRIES
 from .dispatcher import Dispatcher
 from .interfaces import NullRecorder, Recorder
 from .model import Message, Model, ToolCall, ToolResult
-from .narration import narration_problems, render
+from .narration import USABLE_FIELDS, narration_problems, normalize, render
 from .prompt import DEFAULT_GOAL, SYSTEM_PROMPT
 from .tools import TOOL_SCHEMAS
 
@@ -38,10 +38,23 @@ class AgentRun:
         return [tc for m in self.messages if m.role == "model" for tc in m.tool_calls]
 
 
+FINAL_TURN = (
+    "You have reached the step limit. Do not call any tool. Write the final summary now from what you already "
+    "know: what is wrong, what passed or why nothing did, and what happens next. If no recovery plan passed, say "
+    "the situation is infeasible and recommend SAFE_MODE."
+)
+
+
+def usable_fields() -> str:
+    return "; ".join(f"{k}: {', '.join(v)}" for k, v in USABLE_FIELDS.items())
+
+
 def narration_feedback(problems: list[str]) -> str:
     return (
-        "Your summary breaks the narration rule (" + "; ".join(problems) + "). Rewrite it without any digits: "
-        "refer to numbers only through placeholders such as {S-1.worst_margin_soc}, and only to ids that exist."
+        "Your summary breaks the narration rule (" + "; ".join(problems) + "). Rewrite it without any digits. "
+        "Write ids (SAT-07, P-2, S-3, AP-1, AL-1, FR-2, H2) and station names as plain words, never in braces. "
+        "The only braces allowed are placeholders {<id>.<field>}, for example {S-1.worst_margin_soc}, with an id "
+        "that exists and one of these fields: " + usable_fields() + "."
     )
 
 
@@ -62,20 +75,31 @@ def run_agent(
     retries = 0
 
     for step in range(1, max_steps + 1):
+        final_turn = step == max_steps and step > 1 and messages[-1].role == "tool"
+        if final_turn:  # out of steps after tool work: ask for the summary with no tools, so it is never lost
+            messages.append(Message(role="user", text=FINAL_TURN))
         rec.record(
             "model_request",
-            {"step": step, "n_messages": len(messages), "narration_retry": retries, "model": model_name},
+            {"step": step, "n_messages": len(messages), "narration_retry": retries, "model": model_name,
+             **({"final_turn": True} if final_turn else {})},
         )
         started = time.perf_counter()
-        response = model.generate(system, list(messages), TOOL_SCHEMAS)
+        response = model.generate(system, list(messages), () if final_turn else TOOL_SCHEMAS)
         latency_ms = (time.perf_counter() - started) * 1000.0
         rec.record("model_response", response.to_payload(), tokens=response.tokens, latency_ms=latency_ms)
         messages.append(Message(role="model", text=response.text, tool_calls=response.tool_calls))
 
+        if final_turn:
+            text = normalize(response.text or "")
+            if text and not narration_problems(text, dispatcher):
+                return AgentRun(status="step_cap", steps=step, final_text=text,
+                                rendered_text=render(text, dispatcher), messages=messages)
+            return AgentRun(status="step_cap", steps=step, final_text=None, messages=messages)
+
         if not response.tool_calls:
-            problems = narration_problems(response.text or "", dispatcher)
+            text = normalize(response.text or "")
+            problems = narration_problems(text, dispatcher)
             if not problems:
-                text = response.text or ""
                 return AgentRun(status="done", steps=step, final_text=text, rendered_text=render(text, dispatcher),
                                 messages=messages)
             if retries >= MAX_NARRATION_RETRIES:
