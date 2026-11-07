@@ -1,7 +1,9 @@
-"""Tool dispatcher: checks tool-call args, calls the Backend interfaces, and keeps the agent's plan registry.
+"""Tool dispatcher: checks tool-call args, runs the safety layer, calls the Backend interfaces, and keeps the
+agent's registry of plans, simulation results, alerts and approvals.
 
 Bad input never raises out of `dispatch`; the model gets `{"error": ...}` back and can try again.
 Every result is plain JSON (no NaN, no pydantic objects), ready for the model and the flight recorder.
+`approve()` is the check behind POST /api/approve.
 """
 from __future__ import annotations
 
@@ -16,22 +18,24 @@ from contracts import (
     HYPOTHESES,
     HYPOTHESIS_LABELS,
     SAT_IDS,
+    Alert,
+    ApprovalRefused,
     ApprovalRequestMsg,
     Assignment,
-    Command,
     Plan,
     ScheduleRequest,
     ScheduleResult,
     SimResult,
 )
 
-from .interfaces import Backend
+from . import safety
+from .interfaces import Backend, NullRecorder, Recorder
+from .safety import SafetyError
 from .tools import DEFAULT_MONTE_CARLO, MAX_MONTE_CARLO, TOOL_SCHEMAS
 
 TELEMETRY_WINDOW_S = 3 * 3600.0  # default get_telemetry window, ending now
 MAX_TELEMETRY_POINTS = 120  # keep tool results small for the model
 UPLINK_DURATION_S = 60.0  # station time requested per plan uplink
-_COMMAND_FIELDS = {"name", "args", "t_exec"}
 
 
 class ToolArgError(ValueError):
@@ -50,8 +54,12 @@ class Dispatcher:
         self.created_by = created_by
         self.plans: dict[str, Plan] = {}
         self.sims: dict[str, SimResult] = {}  # latest SimResult per plan_id
+        self.sim_results: dict[str, SimResult] = {}  # every SimResult by sim_id
+        self.alerts: dict[str, Alert] = {}
         self.approvals: dict[str, ApprovalRequestMsg] = {}
+        self.assignments: dict[str, Assignment] = {}  # latest scheduler assignment per plan_id
         self.last_schedule: ScheduleResult | None = None
+        self._decided: set[str] = set()
         self._schedule_requests: dict[str, ScheduleRequest] = {}
         self._schemas = {s["name"]: s["parameters"] for s in TOOL_SCHEMAS}
         self._handlers = {name: getattr(self, f"_tool_{name}") for name in AGENT_TOOLS}
@@ -64,8 +72,8 @@ class Dispatcher:
         try:
             outcome = handler(**self._check_args(name, args))
         except ValidationError as exc:
-            return ToolOutcome({"error": "; ".join(_short(e["msg"]) for e in exc.errors())})
-        except (ValueError, LookupError) as exc:  # ToolArgError, or a backend refusing the input
+            return ToolOutcome({"error": "; ".join(e["msg"].removeprefix("Value error, ") for e in exc.errors())})
+        except (ValueError, LookupError) as exc:  # SafetyError, ToolArgError, or a backend refusing the input
             return ToolOutcome({"error": str(exc) or type(exc).__name__})
         return ToolOutcome(jsonable(outcome.result), outcome.plan_hash)
 
@@ -83,10 +91,69 @@ class Dispatcher:
             raise ToolArgError(f"{name}: missing argument(s) {missing}")
         return dict(args)
 
+    def lookup(self, obj_id: str) -> BaseModel | None:
+        """Narration registry: plan, SimResult, approval or alert by id."""
+        for prefix, table in (("AP-", self.approvals), ("AL-", self.alerts), ("P-", self.plans),
+                              ("S-", self.sim_results)):
+            if obj_id.startswith(prefix):
+                return table.get(obj_id)
+        return None
+
+    def record_sim(self, sim: SimResult) -> None:
+        """Store a SimResult as the latest one for its plan."""
+        self.sims[sim.plan_id] = sim
+        self.sim_results[sim.sim_id] = sim
+
+    # ------------------------------------------------------------------ approval (POST /api/approve)
+    def approve(self, approval_id: str, plan_hash: str, recorder: Recorder | None = None) -> Plan | ApprovalRefused:
+        """Return the Plan to execute, or ApprovalRefused. Executes only if the hash equals the hash of the
+        latest SimResult for that plan, the plan passed verification, and the uplink window is still open.
+        A plan that failed verification can never be approved. There is no override."""
+        rec = recorder if recorder is not None else NullRecorder()
+        ticket = self.approvals.get(approval_id)
+        failing: list[str] = []
+        try:
+            if ticket is None:
+                raise SafetyError("unknown_approval", f"no approval {approval_id!r}")
+            if approval_id in self._decided:
+                raise SafetyError("already_decided", f"{approval_id} was already approved")
+            plan = self.plans[ticket.plan_id]
+            sim = self.sims.get(plan.plan_id)
+            if sim is None:
+                raise SafetyError("not_verified", f"{plan.plan_id} has no simulation result")
+            if not sim.passes_all:
+                failing = safety.failing_hypotheses(sim)
+                raise SafetyError("failed_verification", f"{plan.plan_id} failed verification ({sim.sim_id})")
+            current = safety.plan_hash(plan)
+            if not (plan_hash == current == sim.plan_hash == ticket.plan_hash):
+                raise SafetyError("stale_hash", f"hash does not match the latest verified version of {plan.plan_id}")
+            safety.check_plan(plan, self.backend.contacts(), now=self.backend.now())
+            slot = self.assignments.get(plan.plan_id)
+            if slot is not None and self.backend.now() >= slot.end_t:
+                raise SafetyError("uplink_closed", f"the scheduled uplink for {plan.plan_id} has passed")
+        except SafetyError as exc:
+            refused = ApprovalRefused(reason_key=exc.reason_key, failing_hypotheses=failing)
+            rec.record(
+                "approval_refused",
+                {"approval_id": approval_id, "reason_key": exc.reason_key, "failing_hypotheses": failing,
+                 "detail": exc.args[0]},
+                plan_hash=ticket.plan_hash if ticket else None,
+            )
+            return refused
+        self._decided.add(approval_id)
+        rec.record(
+            "approval",
+            {"approval_id": approval_id, "plan_id": plan.plan_id, "sat_id": plan.sat_id, "sim_id": sim.sim_id},
+            plan_hash=current,
+        )
+        return plan
+
     # ------------------------------------------------------------------ tools
     def _tool_get_fleet_status(self) -> ToolOutcome:
         t = self.backend.now()
-        return ToolOutcome({"t": t, "triage": self.backend.triage(), "alerts": self.backend.detect(t)})
+        alerts = self.backend.detect(t)
+        self.alerts.update((a.alert_id, a) for a in alerts)
+        return ToolOutcome({"t": t, "triage": self.backend.triage(), "alerts": alerts})
 
     def _tool_get_telemetry(self, sat_id: Any, t_from: Any = None, t_to: Any = None) -> ToolOutcome:
         sat_id = _sat_id(sat_id)
@@ -133,9 +200,9 @@ class Dispatcher:
         hyps = _hypotheses(hypotheses)
         n = _monte_carlo(monte_carlo)
         sim = self.backend.simulate(plan, hyps, n)
-        if sim.plan_id != plan.plan_id or sim.plan_hash != plan.plan_hash:
+        if sim.plan_id != plan.plan_id or sim.plan_hash != safety.plan_hash(plan):
             raise RuntimeError(f"verifier returned a result for another plan ({sim.plan_id})")
-        self.sims[plan.plan_id] = sim
+        self.record_sim(sim)
         return ToolOutcome(sim.model_dump(), sim.plan_hash)
 
     def _tool_schedule_uplink(self, plan_id: Any) -> ToolOutcome:
@@ -149,8 +216,15 @@ class Dispatcher:
         )
         # Re-solve with every pending request so station conflicts between satellites are resolved together.
         result = self.backend.schedule(list(self._schedule_requests.values()))
+        contacts = self.backend.contacts()
+        for a in result.assignments:  # the scheduler is checked too: every slot must be inside a contact
+            req = self._schedule_requests.get(a.plan_id)
+            if req is None:
+                raise RuntimeError(f"scheduler returned unknown plan {a.plan_id}")
+            safety.check_assignment(a, req.sat_id, contacts)
         self.last_schedule = result
-        mine: Assignment | None = next((a for a in result.assignments if a.plan_id == plan.plan_id), None)
+        self.assignments = {a.plan_id: a for a in result.assignments}
+        mine = self.assignments.get(plan.plan_id)
         out: dict[str, Any] = {"plan_id": plan.plan_id, "scheduled": mine is not None, "solver": result.solver}
         if mine is not None:
             out.update(station_id=mine.station_id, start_t=mine.start_t, end_t=mine.end_t)
@@ -164,7 +238,7 @@ class Dispatcher:
         self.approvals[approval_id] = ApprovalRequestMsg(
             approval_id=approval_id,
             plan_id=plan.plan_id,
-            plan_hash=plan.plan_hash,
+            plan_hash=safety.plan_hash(plan),
             sat_id=plan.sat_id,
             tier=tier,
             sim_id=sim.sim_id,
@@ -176,21 +250,15 @@ class Dispatcher:
         sat_id = _sat_id(sat_id)
         if not isinstance(commands, list) or not commands:
             raise ToolArgError("commands must be a non-empty list")
-        uplink = self.backend.next_contact(sat_id, self.backend.now())
+        now = self.backend.now()
+        uplink = self.backend.next_contact(sat_id, now)
         if uplink is None:
             raise ToolArgError(f"{sat_id} has no contact window left in the horizon")
-        cmds = []
-        for i, c in enumerate(commands):
-            if not isinstance(c, Mapping):
-                raise ToolArgError(f"commands[{i}] must be an object")
-            extra = set(c) - _COMMAND_FIELDS
-            if extra:
-                raise ToolArgError(f"commands[{i}]: unknown field(s) {sorted(extra)}")
-            t_exec = uplink.aos if c.get("t_exec") is None else _finite(f"commands[{i}].t_exec", c["t_exec"])
-            cmds.append(Command(t_exec=t_exec, name=c.get("name"), args=c.get("args") or {}))
+        cmds = [safety.parse_command(c, default_t_exec=uplink.aos) for c in commands]
         plan_id = f"P-{len(self.plans) + 1}"
         plan = Plan(plan_id=plan_id, sat_id=sat_id, kind=kind, uplink=uplink, commands=cmds,
                     created_by=self.created_by)
+        safety.check_plan(plan, self.backend.contacts(), now=now)
         self.plans[plan_id] = plan
         return ToolOutcome({"plan_id": plan_id}, plan.plan_hash)
 
@@ -201,14 +269,20 @@ class Dispatcher:
         return plan
 
     def _verified(self, plan_id: Any) -> Plan:
+        """A registered plan that is still safe and whose latest simulation passed, for this exact hash."""
         plan = self._plan(plan_id)
+        safety.check_plan(plan, self.backend.contacts(), now=self.backend.now())
         sim = self.sims.get(plan.plan_id)
         if sim is None:
-            raise ToolArgError(f"{plan.plan_id} has not been simulated; call simulate first")
-        if sim.plan_hash != plan.plan_hash:
-            raise ToolArgError(f"{plan.plan_id} changed since it was simulated; simulate it again")
+            raise SafetyError("not_verified", f"{plan.plan_id} has not been simulated; call simulate first")
+        if sim.plan_hash != safety.plan_hash(plan):
+            raise SafetyError("stale_hash", f"{plan.plan_id} changed since it was simulated; simulate it again")
         if not sim.passes_all:
-            raise ToolArgError(f"{plan.plan_id} failed verification ({sim.sim_id}); it can never be uplinked")
+            raise SafetyError(
+                "failed_verification",
+                f"{plan.plan_id} failed verification ({sim.sim_id}) under {', '.join(safety.failing_hypotheses(sim))}; "
+                "it can never be uplinked or approved",
+            )
         return plan
 
     def _priority(self, sat_id: str) -> float:
@@ -248,10 +322,6 @@ def _monte_carlo(value: Any) -> int:
     if not 1 <= n <= MAX_MONTE_CARLO:
         raise ToolArgError(f"monte_carlo must be between 1 and {MAX_MONTE_CARLO}")
     return n
-
-
-def _short(msg: str) -> str:
-    return msg.removeprefix("Value error, ")
 
 
 # ---------------------------------------------------------------------- JSON

@@ -1,6 +1,8 @@
 """The agent loop: model turn -> tool calls -> tool results -> next model turn, at most MAX_STEPS model turns.
 
 Every model request/response and tool call/result goes to the recorder (CONTRACTS.md flight recorder kinds).
+The final text must pass the narration rule; if not, the model is re-asked at most MAX_NARRATION_RETRIES times,
+after which the run ends with no narration and the UI shows tool results only.
 """
 from __future__ import annotations
 
@@ -8,25 +10,37 @@ import time
 from dataclasses import dataclass, field
 from typing import Literal
 
+from contracts import MAX_NARRATION_RETRIES
+
 from .dispatcher import Dispatcher
 from .interfaces import NullRecorder, Recorder
 from .model import Message, Model, ToolCall, ToolResult
+from .narration import narration_problems, render
 from .prompt import DEFAULT_GOAL, SYSTEM_PROMPT
 from .tools import TOOL_SCHEMAS
 
-MAX_STEPS = 25  # model turns per run
+MAX_STEPS = 25  # model turns per run, narration re-asks included
 
 
 @dataclass
 class AgentRun:
     status: Literal["done", "step_cap"]
     steps: int  # model turns used
-    final_text: str | None  # text of the last turn without tool calls; None if the step cap was hit
+    final_text: str | None  # accepted final text with placeholders; None if rejected or the step cap was hit
+    rendered_text: str | None = None  # final_text with placeholders filled in by the backend: show this one
+    narration_rejected: bool = False  # True if the model kept breaking the narration rule
     messages: list[Message] = field(default_factory=list)
 
     @property
     def tool_calls(self) -> list[ToolCall]:
         return [tc for m in self.messages if m.role == "model" for tc in m.tool_calls]
+
+
+def narration_feedback(problems: list[str]) -> str:
+    return (
+        "Your summary breaks the narration rule (" + "; ".join(problems) + "). Rewrite it without any digits: "
+        "refer to numbers only through placeholders such as {S-1.worst_margin_soc}, and only to ids that exist."
+    )
 
 
 def run_agent(
@@ -40,9 +54,10 @@ def run_agent(
 ) -> AgentRun:
     rec = recorder if recorder is not None else NullRecorder()
     messages: list[Message] = [Message(role="user", text=goal)]
+    retries = 0
 
     for step in range(1, max_steps + 1):
-        rec.record("model_request", {"step": step, "n_messages": len(messages)})
+        rec.record("model_request", {"step": step, "n_messages": len(messages), "narration_retry": retries})
         started = time.perf_counter()
         response = model.generate(system, list(messages), TOOL_SCHEMAS)
         latency_ms = (time.perf_counter() - started) * 1000.0
@@ -50,7 +65,17 @@ def run_agent(
         messages.append(Message(role="model", text=response.text, tool_calls=response.tool_calls))
 
         if not response.tool_calls:
-            return AgentRun(status="done", steps=step, final_text=response.text, messages=messages)
+            problems = narration_problems(response.text or "", dispatcher)
+            if not problems:
+                text = response.text or ""
+                return AgentRun(status="done", steps=step, final_text=text, rendered_text=render(text, dispatcher),
+                                messages=messages)
+            if retries >= MAX_NARRATION_RETRIES:
+                return AgentRun(status="done", steps=step, final_text=None, narration_rejected=True,
+                                messages=messages)
+            retries += 1
+            messages.append(Message(role="user", text=narration_feedback(problems)))
+            continue
 
         results = []
         for call in response.tool_calls:

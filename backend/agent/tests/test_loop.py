@@ -155,3 +155,44 @@ def test_tool_errors_go_back_to_the_model():
     assert tool_turn.role == "tool"
     assert "error" in tool_turn.tool_results[0].result
     assert tool_turn.tool_results[0].id == "x"
+
+
+# ---------------------------------------------------------------- T10: narration rule in the loop
+def test_stub_narration_is_rendered_from_backend_values():
+    run, d = stub_run()
+    assert run.rendered_text and "{" not in run.rendered_text
+    assert "% SOC" in run.rendered_text
+    assert not run.narration_rejected
+
+
+class TextModel:
+    """Answers with the given texts in order (no tool calls)."""
+
+    def __init__(self, *texts):
+        self.texts = list(texts)
+        self.seen = []
+
+    def generate(self, system, messages, tools):
+        self.seen.append(list(messages))
+        return ModelResponse(text=self.texts.pop(0))
+
+
+def test_bare_digit_narration_is_re_asked_then_accepted():
+    model = TextModel("SOC drops to 18 percent.", "SOC drops below the limit on SAT-07.")
+    rec = ListRecorder()
+    run = run_agent(model, Dispatcher(MockBackend()), rec)
+    assert (run.status, run.steps) == ("done", 2)
+    assert run.final_text == run.rendered_text == "SOC drops below the limit on SAT-07."
+    feedback = model.seen[1][-1]
+    assert feedback.role == "user" and "narration rule" in feedback.text and "bare digits" in feedback.text
+    assert [e.payload["narration_retry"] for e in rec.events if e.kind == "model_request"] == [0, 1]
+
+
+def test_narration_rejected_after_two_retries():
+    model = TextModel("Use 3 commands.", "Use 3 commands.", "P-80 is best.", "never asked")
+    run = run_agent(model, Dispatcher(MockBackend()))
+    assert run.status == "done"
+    assert run.steps == 1 + c.MAX_NARRATION_RETRIES == 3
+    assert run.final_text is None and run.rendered_text is None
+    assert run.narration_rejected
+    assert model.texts == ["never asked"]

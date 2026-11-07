@@ -17,7 +17,7 @@ def main() -> None:
     for e in recorder.events:
         body = json.dumps(e.payload, separators=(",", ":"))
         print(f"{e.seq:3d} {e.kind:15s} {body[:150]}{'...' if len(body) > 150 else ''}")
-    print(f"\nstatus={run.status} steps={run.steps}\n{run.final_text}")
+    print(f"\nstatus={run.status} steps={run.steps}\nraw:      {run.final_text}\nrendered: {run.rendered_text}")
 
 
 if __name__ == "__main__":
