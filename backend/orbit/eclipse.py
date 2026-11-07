@@ -107,6 +107,7 @@ class OrbitModel:
         self.cache_dir = Path(cache_dir or os.environ.get("PENUMBRA_ORBIT_CACHE", default_cache))
         self._skyfield_times = None
         self._sun_km = None
+        self._contacts = None
 
     def _times(self):
         if self._skyfield_times is None:
@@ -162,3 +163,44 @@ class OrbitModel:
             np.save(stream, result)
         os.replace(temporary, path)
         return result
+
+    def beta_deg(self, sat_id: str) -> float:
+        """Return the absolute Sun-to-orbit-plane angle at the grid start."""
+        from .contacts import beta_from_vectors
+
+        state = self.assets.satellites[sat_id].at(self._times()[0])
+        return beta_from_vectors(
+            state.position.km, state.velocity.km_per_s, self._sun_positions()[:, 0]
+        )
+
+    def contacts(self):
+        """Return globally sorted complete 10-degree contact windows."""
+        from .contacts import find_contacts
+
+        if self._contacts is None:
+            self._contacts = find_contacts(self)
+        return list(self._contacts)
+
+    def next_contact(self, sat_id: str, t: float):
+        """Return the first contact whose LOS is after t, including one underway."""
+        if sat_id not in self.assets.satellites:
+            raise KeyError(sat_id)
+        return next((c for c in self.contacts() if c.sat_id == sat_id and c.los > t), None)
+
+    def positions(self, t: float) -> dict[str, dict[str, float]]:
+        """Return geodetic fleet positions and illumination at POSIX time t."""
+        from .globe import positions
+
+        return positions(self, t)
+
+    def orbit_path(self, sat_id: str, t: float, minutes: float | None = None) -> list[list[float]]:
+        """Return a geodetic track, defaulting to one orbit ahead."""
+        from .globe import orbit_path
+
+        return orbit_path(self, sat_id, t, minutes)
+
+    def sun_direction(self, t: float) -> list[float]:
+        """Return the Earth-fixed Sun direction at POSIX time t."""
+        from .globe import sun_direction
+
+        return sun_direction(self, t)
