@@ -11,7 +11,8 @@ Gates from the plan:
 - Sun 09:00: numbers locked
 
 ## Human tasks (not seeded)
-- H0, before 13:00 (A+B): approve CONTRACTS.md and this backlog; set up environments, keys and data (see docs/PRE-EVENT.md). B: sign up for Vultr via mlh.link/vultr-signup, claim the credits, add an SSH key. Do not create an instance yet.
+- H0 (A+B): approve CONTRACTS.md and this backlog; set up environments, keys and data (see docs/PRE-EVENT.md). B: sign up for Vultr via mlh.link/vultr-signup, claim the credits, add an SSH key. Do not create an instance yet.
+- H0-DATA (A, right after cloning): download once into `data/pcoe/` a NASA PCoE Li-ion battery aging dataset (from the NASA Prognostics repository or its Kaggle mirror) and, if time allows, the BIRDS dataset into `data/birds/`. Commit on a `human/` branch with a `data/README.md` entry (source, license, fetch time). Data only, no code.
 - H-VULTR, Sun 03:30–04:00 (B): create one Vultr compute instance, run the T32 deploy scripts, start the T33 benchmark, then sleep. Destroy the instance after judging.
 - H1, Sat 13:00–14:00 (A+B):
   - Create a public repo and push the pre-event commit (docs, tooling, data only).
@@ -19,7 +20,7 @@ Gates from the plan:
   - Turn on branch protection.
   - Each human sets their own `GEMINI_API_KEY`, `GEMINI_MODEL` and `ELEVENLABS_API_KEY` locally.
   - Run the 30-minute drill.
-- H2, Sat 23:00 (B): Devpost draft.
+- H2, Sat 23:00 (B): Devpost draft with these mandatory sections: (1) Real vs simulated data; (2) Built during the hackathon vs existed before (from docs/PRE-EVENT.md); (3) Sense → Understand → Act mapping for the Radial track; (4) one short paragraph per MLH track (Gemini, ElevenLabs, Vultr).
 - H3, Sun 02:00 (A+B): gate review of the single-sat loop. Apply the plan's 2 AM rule if it fails.
 - H4, Sun 06:00–09:00 (A): record a 90 s fallback video; take screenshots of the matrix and the B1 numbers.
 - H5, Sun 09:00–11:30 (A+B): rehearse the pitch 5 times; finalize Devpost.
@@ -93,7 +94,7 @@ Gates from the plan:
     - undervoltage load shedding;
     - a one-node thermal model.
   - Sensor noise, bias and quantization are applied; telemetry is NaN outside contacts.
-  - Every parameter lives in `backend/eps/params.py`, marked "assumed" or with its source. The §8 EPS tests pass.
+  - Every parameter lives in `backend/eps/params.py`, marked "assumed" or with its source. Where `data/pcoe/` is present, the OCV curve and the capacity-fade rate are fitted from the NASA PCoE battery data and cited; otherwise they are marked assumed. The §8 EPS tests pass.
 
 ### T08 [B1] Seeded faults (5 kinds)
 - Paths: backend/eps/
@@ -118,6 +119,7 @@ Gates from the plan:
   - Boots in under 3 s to a live globe with no loading screen, fed by a local mock `fleet_state` until T05 merges.
   - Draws: 24 sat markers with one-orbit-ahead tracks, day/night lighting from `sun_direction`, the Earth shadow volume (umbra cylinder plus a soft penumbra ring) behind the night side, station cones, and each marker fading with `illum` as it crosses the penumbra. A bottom ticker shows fleet stats.
   - Attract mode: slow camera orbit at 120× sim speed; the scene must look alive before anyone touches it.
+  - A permanent "Real / Simulated" legend: orbits, Sun geometry, stations, contacts = real; power, thermal and faults = simulated. Required by the Radial track rules.
   - Works with Wi-Fi off; check this by hand and note it in progress/A2.md.
 
 ### T10 [A1] Safety layer
@@ -307,13 +309,13 @@ Gates from the plan:
   - B5: payload uptime versus "safe mode immediately".
   - Every results file reports n and the seeds.
 
-### T30 [B2] (stretch) M1 step 1: BIRDS fingerprint sanity check
+### T30 [B2] (stretch) M1 step 1: real-data sanity check (PCoE battery, BIRDS)
 - Paths: bench/, data/
 - Blocked by: T08
 - Due: Sun 08:30
 - Accept:
-  - A human downloads the BIRDS data once into `data/birds/`.
-  - Compare the real panel-failure signature with our array_degradation fault: one plot and one metric.
+  - Uses the datasets a human downloaded into `data/pcoe/` and, if present, `data/birds/`.
+  - PCoE: our capacity_fade fault versus a real cell's capacity curve, one plot and one metric. BIRDS (if present): the real panel-failure signature versus our array_degradation fault.
   - Writes `bench/results/m1.json` and a PNG, labeled "sanity check, not validation".
 
 ### T31 [B2] (stretch, proposed) M2 conjunction avoidance coupled with power

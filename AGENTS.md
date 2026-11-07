@@ -30,6 +30,7 @@ Unit tests live next to the code you own (e.g. `backend/eps/tests/`). `tests/` i
 - No network in tests. Never call CelesTrak from code; read `data/omm/*.json`, which a human fetched once. Tests must pass with `PENUMBRA_OFFLINE=1`.
 - Time is UTC and timezone-aware; arrays use POSIX seconds. SI units unless the field name says otherwise (`_deg`, `_c`, `_wh`, `_ms`).
 - Satellites are always `SAT-01`..`SAT-24`. Never show real operator or satellite names.
+- Data transparency (Radial track rule): the UI always shows a "Real / Simulated" legend, and every results file states which inputs are real and which are simulated.
 - After the feature freeze (Sun 06:00), only PRs labeled `fix`.
 
 ## 3. Task loop
