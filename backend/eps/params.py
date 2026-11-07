@@ -50,9 +50,10 @@ TRUTH: dict[str, Param] = {
     "fade_per_cycle": Param(0.002107, "1/cycle", PCOE + ", linear capacity fade, fraction of BOL per cycle"),
     "r_temp_b": Param(3000.0, "K", "assumed: Arrhenius factor for R0 vs temperature, R = R25 exp(B (1/T - 1/T25))"),
     "charge_min_temp_c": Param(0.0, "degC", "assumed: no charging below 0 degC (standard Li-ion rule)"),
-    "charge_c_rate": Param(0.5, "1/h", "assumed: max charge current 0.5 C"),
+    "charge_current_max_a": Param(3.0, "A", "assumed: charger constant-current limit, 0.5 C of the rated 6 Ah pack "
+                                  "(a design value: it does not follow the real capacity)"),
     "taper_soc": Param(0.90, "-", "assumed: charge current tapers linearly to 0 between this SOC and 1"),
-    "discharge_c_rate": Param(2.0, "1/h", "assumed: max discharge current 2 C"),
+    "discharge_current_max_a": Param(12.0, "A", "assumed: discharge protection limit, 2 C of the rated pack"),
     "v_shed_cell": Param(3.30, "V", "assumed: undervoltage load-shed threshold per cell (13.2 V pack)"),
     # ---- loads (W when on) ----
     "load_power": Param(

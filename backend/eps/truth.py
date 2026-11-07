@@ -271,10 +271,10 @@ def run(
         discharging = p_b > 0
 
         i_dis, served = physics.current_for_power(np.maximum(p_b, 0.0), voc, r)
-        i_dis_max = np.minimum(cap * p.discharge_c_rate, soc * cap * 3600.0 / dt)
+        i_dis_max = np.minimum(p.discharge_current_max_a, soc * cap * 3600.0 / dt)
         i_chg_wanted, _ = physics.current_for_power(-np.maximum(-p_b, 0.0), voc, r)
         i_chg_max = np.minimum(
-            physics.charge_limit(soc, temp, cap, p.charge_c_rate, p.taper_soc, p.charge_min_temp_c),
+            physics.charge_limit(soc, temp, p.charge_current_max_a, p.taper_soc, p.charge_min_temp_c),
             (1.0 - soc) * cap * 3600.0 / (eta * dt))
         i_chg = np.minimum(-i_chg_wanted, i_chg_max)
         current = np.where(discharging, np.minimum(i_dis, i_dis_max), -i_chg)

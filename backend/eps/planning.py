@@ -212,6 +212,9 @@ class BatchResult:
     n_commands: np.ndarray         # (S, P)
     evals_per_s: float             # (S*H*P*M*N) step evaluations per second
     soc_history: np.ndarray | None = field(default=None, repr=False)   # (S, H, P, M, N) only if requested
+    # predicted telemetry channels (truth-free readings), each (S, H, P, M, N), only if record_channels;
+    # i_bat here is + = charging, as in telemetry
+    channels: dict[str, np.ndarray] | None = field(default=None, repr=False)
 
 
 # ----------------------------------------------------------------------------- the model
@@ -227,6 +230,7 @@ def simulate_batch(
     soc_threshold: float = 0.0,
     dtype=np.float64,
     record_soc: bool = False,
+    record_channels: bool = False,
 ) -> BatchResult:
     p = params or planning_params()
     t = np.asarray(t, float)
@@ -245,12 +249,14 @@ def simulate_batch(
     load_factor = f(pert.load_factor)
     w = np.asarray([p.load_power[name] for name in LOADS], dtype)
     panel_coef = (p.solar_flux * p.panel_area * p.cell_efficiency * p.packing_factor * p.regulator_eff
-                  * hyps.array_factor).sum(axis=2)                     # (S, H) at normal incidence, sunlit
+                  * hyps.array_factor)                                 # (S, H, Pn) at normal incidence, sunlit
     beta = np.asarray(beta_deg, float)
     beta = np.broadcast_to(beta[:, None] if beta.ndim == 1 else beta, (s_n, n))
     cos_inc = np.cos(np.radians(beta[:, None, :] + hyps.extra_beta_deg[:, :, None]))   # (S, H, N)
-    p_sun = (panel_coef[:, :, None] * np.clip(cos_inc, 0, 1) * np.clip(np.asarray(illum)[:, None, :], 0, 1))
-    p_sun = p_sun.astype(dtype)                                        # (S, H, N)
+    sun = np.clip(cos_inc, 0, 1) * np.clip(np.asarray(illum)[:, None, :], 0, 1)
+    p_sun_pan = (panel_coef[:, :, :, None] * sun[:, :, None, :]).astype(dtype)   # (S, H, Pn, N)
+    p_sun = p_sun_pan.sum(axis=2)                                      # (S, H, N)
+    panels = tuple(p.panels)
     array_factor = f(pert.array_factor)
     stuck = hyps.stuck_on[:, :, None, None, :]                         # (S, H, 1, 1, L)
     other = np.array([i not in (I_PAYLOAD, I_HEATER) for i in range(len(LOADS))])
@@ -269,6 +275,10 @@ def simulate_batch(
     uptime = np.zeros(shape, dtype)
     t_below = np.full(shape, np.nan)
     hist = np.empty(shape + (n,), dtype) if record_soc else None
+    chans = None
+    if record_channels:
+        names = ("soc", "v_bus", "i_bat", "p_load", "t_bat_c") + tuple(f"i_array_{pn}" for pn in panels)
+        chans = {name: np.empty(shape + (n,), dtype) for name in names}
 
     clock = time.perf_counter()
     for k in range(n):
@@ -288,10 +298,10 @@ def simulate_batch(
         p_b = p_demand - p_avail
         discharging = p_b > 0
         i_dis, _ = physics.current_for_power(np.maximum(p_b, 0), voc, r)
-        i_dis = np.minimum(i_dis, soc * cap * 3600.0 / dt)
+        i_dis = np.minimum(i_dis, np.minimum(p.discharge_current_max_a, soc * cap * 3600.0 / dt))
         i_chg_w, _ = physics.current_for_power(-np.maximum(-p_b, 0), voc, r)
         i_chg = np.minimum(-i_chg_w, np.minimum(
-            physics.charge_limit(soc, temp, cap, p.charge_c_rate, p.taper_soc, p.charge_min_temp_c),
+            physics.charge_limit(soc, temp, p.charge_current_max_a, p.taper_soc, p.charge_min_temp_c),
             (1.0 - soc) * cap * 3600.0 / (eta * dt)))
         current = np.where(discharging, i_dis, -i_chg)
         v_t = voc - current * r
@@ -306,6 +316,17 @@ def simulate_batch(
             t_below[newly] = t[k]
         if hist is not None:
             hist[..., k] = soc
+        if chans is not None:
+            p_term = v_t * current
+            p_used = np.where(discharging, p_avail, p_demand - p_term)
+            used = np.divide(p_used, p_avail, out=np.zeros_like(p_used), where=p_avail > 0)
+            chans["soc"][..., k] = soc
+            chans["v_bus"][..., k] = v_t
+            chans["i_bat"][..., k] = -current
+            chans["p_load"][..., k] = p_demand
+            chans["t_bat_c"][..., k] = temp
+            for j, pn in enumerate(panels):
+                chans[f"i_array_{pn}"][..., k] = p_sun_pan[:, :, j, None, None, k] * array_factor * used / v_t
 
         soc = np.clip(soc + np.where(current > 0, -current, -current * eta) * dt / 3600.0 / cap, 0.0, 1.0)
         q = current * current * r + heater_on * w[I_HEATER] * load_factor
@@ -318,5 +339,5 @@ def simulate_batch(
     return BatchResult(
         min_soc=min_soc, min_v_bus=min_v, t_bat_min_c=t_min, t_bat_max_c=t_max,
         payload_uptime=uptime / n, soc_end=soc, t_soc_below=t_below, hyp_names=hyps.names,
-        n_commands=ctl.n_commands, evals_per_s=evals, soc_history=hist,
+        n_commands=ctl.n_commands, evals_per_s=evals, soc_history=hist, channels=chans,
     )

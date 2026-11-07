@@ -1,0 +1,574 @@
+{
+ "metric": "true fault ranks first after one diagnostic",
+ "n_seeds": 20,
+ "top1_after_diagnostic": 1.0,
+ "top1_before_diagnostic": 0.8,
+ "truth_in_plausible_after": 1.0,
+ "target": 0.8,
+ "healthy_false_alarm_rate": 0.03333333333333333,
+ "healthy_satellite_scores": 60,
+ "runtime_s": 28.3,
+ "data": {
+  "real": [
+   "battery OCV curve, R0, coulombic efficiency and fade rate inside the truth simulator (fitted from NASA PCoE, Saha & Goebel 2007)"
+  ],
+  "simulated": [
+   "orbit (synthetic circular 500 km, beta 20 deg)",
+   "contacts (10 min every 90 min)",
+   "EPS telemetry (truth simulator)",
+   "faults (seeded)"
+  ]
+ },
+ "rows": [
+  {
+   "seed": 0,
+   "truth": "H3",
+   "kind": "capacity_fade",
+   "pre_top": "H3",
+   "post_top": "H3",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H3"
+   ],
+   "correct_pre": true,
+   "correct_post": true
+  },
+  {
+   "seed": 1,
+   "truth": "H1",
+   "kind": "array_degradation",
+   "pre_top": "H1",
+   "post_top": "H1",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H1"
+   ],
+   "correct_pre": true,
+   "correct_post": true
+  },
+  {
+   "seed": 2,
+   "truth": "H3",
+   "kind": "capacity_fade",
+   "pre_top": "H3",
+   "post_top": "H3",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H3"
+   ],
+   "correct_pre": true,
+   "correct_post": true
+  },
+  {
+   "seed": 3,
+   "truth": "H2",
+   "kind": "stuck_on_load",
+   "pre_top": "H0",
+   "post_top": "H2",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H2"
+   ],
+   "correct_pre": false,
+   "correct_post": true
+  },
+  {
+   "seed": 4,
+   "truth": "H2",
+   "kind": "stuck_on_load",
+   "pre_top": "H0",
+   "post_top": "H2",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H2"
+   ],
+   "correct_pre": false,
+   "correct_post": true
+  },
+  {
+   "seed": 5,
+   "truth": "H3",
+   "kind": "capacity_fade",
+   "pre_top": "H3",
+   "post_top": "H3",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H3"
+   ],
+   "correct_pre": true,
+   "correct_post": true
+  },
+  {
+   "seed": 6,
+   "truth": "H4",
+   "kind": "sensor_bias",
+   "pre_top": "H4",
+   "post_top": "H4",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H4"
+   ],
+   "correct_pre": true,
+   "correct_post": true
+  },
+  {
+   "seed": 7,
+   "truth": "H5",
+   "kind": "beta_season",
+   "pre_top": "H5",
+   "post_top": "H5",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H5"
+   ],
+   "correct_pre": true,
+   "correct_post": true
+  },
+  {
+   "seed": 8,
+   "truth": "H4",
+   "kind": "sensor_bias",
+   "pre_top": "H4",
+   "post_top": "H4",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H4"
+   ],
+   "correct_pre": true,
+   "correct_post": true
+  },
+  {
+   "seed": 9,
+   "truth": "H4",
+   "kind": "sensor_bias",
+   "pre_top": "H4",
+   "post_top": "H4",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H4"
+   ],
+   "correct_pre": true,
+   "correct_post": true
+  },
+  {
+   "seed": 10,
+   "truth": "H3",
+   "kind": "capacity_fade",
+   "pre_top": "H3",
+   "post_top": "H3",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H3"
+   ],
+   "correct_pre": true,
+   "correct_post": true
+  },
+  {
+   "seed": 11,
+   "truth": "H1",
+   "kind": "array_degradation",
+   "pre_top": "H5",
+   "post_top": "H1",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H1"
+   ],
+   "correct_pre": false,
+   "correct_post": true
+  },
+  {
+   "seed": 12,
+   "truth": "H2",
+   "kind": "stuck_on_load",
+   "pre_top": "H0",
+   "post_top": "H2",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H2"
+   ],
+   "correct_pre": false,
+   "correct_post": true
+  },
+  {
+   "seed": 13,
+   "truth": "H5",
+   "kind": "beta_season",
+   "pre_top": "H5",
+   "post_top": "H5",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H5"
+   ],
+   "correct_pre": true,
+   "correct_post": true
+  },
+  {
+   "seed": 14,
+   "truth": "H5",
+   "kind": "beta_season",
+   "pre_top": "H5",
+   "post_top": "H5",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H5"
+   ],
+   "correct_pre": true,
+   "correct_post": true
+  },
+  {
+   "seed": 15,
+   "truth": "H2",
+   "kind": "stuck_on_load",
+   "pre_top": "H2",
+   "post_top": "H2",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H2"
+   ],
+   "correct_pre": true,
+   "correct_post": true
+  },
+  {
+   "seed": 16,
+   "truth": "H4",
+   "kind": "sensor_bias",
+   "pre_top": "H4",
+   "post_top": "H4",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H4"
+   ],
+   "correct_pre": true,
+   "correct_post": true
+  },
+  {
+   "seed": 17,
+   "truth": "H5",
+   "kind": "beta_season",
+   "pre_top": "H5",
+   "post_top": "H5",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H5"
+   ],
+   "correct_pre": true,
+   "correct_post": true
+  },
+  {
+   "seed": 18,
+   "truth": "H2",
+   "kind": "stuck_on_load",
+   "pre_top": "H2",
+   "post_top": "H2",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H2"
+   ],
+   "correct_pre": true,
+   "correct_post": true
+  },
+  {
+   "seed": 19,
+   "truth": "H5",
+   "kind": "beta_season",
+   "pre_top": "H5",
+   "post_top": "H5",
+   "post_truth_posterior": 1.0,
+   "post_plausible": [
+    "H5"
+   ],
+   "correct_pre": true,
+   "correct_post": true
+  }
+ ],
+ "healthy": [
+  {
+   "seed": 0,
+   "beta_deg": 5.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H0"
+   },
+   "p_h0": {
+    "SAT-07": 0.715,
+    "SAT-12": 0.64,
+    "SAT-19": 0.517
+   }
+  },
+  {
+   "seed": 0,
+   "beta_deg": 35.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H0"
+   },
+   "p_h0": {
+    "SAT-07": 0.987,
+    "SAT-12": 0.689,
+    "SAT-19": 0.487
+   }
+  },
+  {
+   "seed": 1,
+   "beta_deg": 5.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H0"
+   },
+   "p_h0": {
+    "SAT-07": 0.731,
+    "SAT-12": 0.564,
+    "SAT-19": 0.452
+   }
+  },
+  {
+   "seed": 1,
+   "beta_deg": 35.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H0"
+   },
+   "p_h0": {
+    "SAT-07": 0.98,
+    "SAT-12": 0.759,
+    "SAT-19": 0.402
+   }
+  },
+  {
+   "seed": 2,
+   "beta_deg": 5.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H0"
+   },
+   "p_h0": {
+    "SAT-07": 0.604,
+    "SAT-12": 0.523,
+    "SAT-19": 0.52
+   }
+  },
+  {
+   "seed": 2,
+   "beta_deg": 35.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H0"
+   },
+   "p_h0": {
+    "SAT-07": 0.852,
+    "SAT-12": 0.682,
+    "SAT-19": 0.49
+   }
+  },
+  {
+   "seed": 3,
+   "beta_deg": 5.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H0"
+   },
+   "p_h0": {
+    "SAT-07": 0.952,
+    "SAT-12": 0.616,
+    "SAT-19": 0.472
+   }
+  },
+  {
+   "seed": 3,
+   "beta_deg": 35.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H0"
+   },
+   "p_h0": {
+    "SAT-07": 1.0,
+    "SAT-12": 0.628,
+    "SAT-19": 0.43
+   }
+  },
+  {
+   "seed": 4,
+   "beta_deg": 5.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H1"
+   },
+   "p_h0": {
+    "SAT-07": 0.714,
+    "SAT-12": 0.611,
+    "SAT-19": 0.013
+   }
+  },
+  {
+   "seed": 4,
+   "beta_deg": 35.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H1"
+   },
+   "p_h0": {
+    "SAT-07": 0.997,
+    "SAT-12": 0.864,
+    "SAT-19": 0.015
+   }
+  },
+  {
+   "seed": 5,
+   "beta_deg": 5.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H0"
+   },
+   "p_h0": {
+    "SAT-07": 0.872,
+    "SAT-12": 0.631,
+    "SAT-19": 0.539
+   }
+  },
+  {
+   "seed": 5,
+   "beta_deg": 35.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H0"
+   },
+   "p_h0": {
+    "SAT-07": 0.975,
+    "SAT-12": 0.59,
+    "SAT-19": 0.526
+   }
+  },
+  {
+   "seed": 6,
+   "beta_deg": 5.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H0"
+   },
+   "p_h0": {
+    "SAT-07": 0.937,
+    "SAT-12": 0.624,
+    "SAT-19": 0.521
+   }
+  },
+  {
+   "seed": 6,
+   "beta_deg": 35.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H0"
+   },
+   "p_h0": {
+    "SAT-07": 0.99,
+    "SAT-12": 0.563,
+    "SAT-19": 0.478
+   }
+  },
+  {
+   "seed": 7,
+   "beta_deg": 5.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H0"
+   },
+   "p_h0": {
+    "SAT-07": 0.522,
+    "SAT-12": 0.598,
+    "SAT-19": 0.471
+   }
+  },
+  {
+   "seed": 7,
+   "beta_deg": 35.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H0"
+   },
+   "p_h0": {
+    "SAT-07": 0.576,
+    "SAT-12": 0.555,
+    "SAT-19": 0.434
+   }
+  },
+  {
+   "seed": 8,
+   "beta_deg": 5.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H0"
+   },
+   "p_h0": {
+    "SAT-07": 0.456,
+    "SAT-12": 0.449,
+    "SAT-19": 0.541
+   }
+  },
+  {
+   "seed": 8,
+   "beta_deg": 35.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H0"
+   },
+   "p_h0": {
+    "SAT-07": 0.466,
+    "SAT-12": 0.456,
+    "SAT-19": 0.502
+   }
+  },
+  {
+   "seed": 9,
+   "beta_deg": 5.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H0"
+   },
+   "p_h0": {
+    "SAT-07": 0.804,
+    "SAT-12": 0.643,
+    "SAT-19": 0.514
+   }
+  },
+  {
+   "seed": 9,
+   "beta_deg": 35.0,
+   "tops": {
+    "SAT-07": "H0",
+    "SAT-12": "H0",
+    "SAT-19": "H0"
+   },
+   "p_h0": {
+    "SAT-07": 0.901,
+    "SAT-12": 0.721,
+    "SAT-19": 0.484
+   }
+  }
+ ],
+ "held_out": {
+  "note": "seeds 20-59 and healthy seeds 10-29 x beta 5/20/35, never used for tuning",
+  "top1_after_diagnostic": 1.0,
+  "top1_before_diagnostic": 0.9,
+  "n_seeds": 40,
+  "healthy_false_alarm_rate": 0.022,
+  "healthy_satellite_scores": 180
+ }
+}

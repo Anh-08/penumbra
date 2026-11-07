@@ -52,8 +52,8 @@ def current_for_power(p_batt, v_oc, r):
     return i, served
 
 
-def charge_limit(soc, t_c, capacity_ah, c_rate, taper_soc, min_temp_c):
-    """Max charge current (A, positive number): C-rate limit, linear taper near full, none when cold."""
+def charge_limit(soc, t_c, i_max, taper_soc, min_temp_c):
+    """Max charge current (A, positive number): charger CC limit, linear taper near full, none when cold."""
     taper = np.clip((1.0 - soc) / (1.0 - taper_soc), 0.0, 1.0)
     warm = np.asarray(t_c) >= min_temp_c
-    return capacity_ah * c_rate * taper * warm
+    return i_max * taper * warm
