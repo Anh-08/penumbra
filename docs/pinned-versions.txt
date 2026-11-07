@@ -6,6 +6,7 @@
 # venv: ~/.venvs/penumbra (outside the repo), created with uv 0.12.17
 # interpreter: Python 3.11.16 (matches CI python-version 3.11)
 # Requested directly: skyfield sgp4 numpy ortools fastapi uvicorn[standard] websockets pydantic python-dotenv google-genai httpx pytest
+# Added Sat 2026-11-07 15:40 EST (T01): scipy openpyxl
 # Full freeze (direct + transitive):
 absl-py==2.5.1
 annotated-doc==0.0.5
@@ -17,6 +18,7 @@ charset-normalizer==3.5.2
 click==8.5.1
 cryptography==50.0.2
 distro==1.9.0
+et-xmlfile==2.0.0
 fastapi==0.162.2
 google-auth==2.62.1
 google-genai==3.0.0
@@ -31,6 +33,7 @@ immutabledict==4.3.1
 iniconfig==2.3.1
 jplephem==2.24
 numpy==2.4.6
+openpyxl==3.1.5
 opentelemetry-api==1.45.2
 ortools==9.15.6755
 packaging==26.3
@@ -49,6 +52,7 @@ python-dateutil==4.0.0
 python-dotenv==1.2.4
 pyyaml==6.0.3
 requests==2.34.2
+scipy==1.17.1
 setuptools==84.2.1
 sgp4==2.27
 skyfield==1.55
