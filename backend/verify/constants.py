@@ -14,7 +14,7 @@ H0_ARRAY_SCALE = (0.97, 1.0, 1.03)
 # Grid sizes for the continuous hypothesis parameters.
 GRID_ARRAY_LOSS = 21
 GRID_EXTRA_BETA = 21
-GRID_CAPACITY = 5
+GRID_CAPACITY = 6
 GRID_BIAS = 4
 # A hypothesis is plausible if its posterior is at least this (the top one always is).
 PLAUSIBLE_MIN = 0.05

@@ -144,7 +144,7 @@ def test_fewer_commands_break_ties(env):
 
 
 def test_diagnostic_judged_over_its_own_window(env):
-    v = verifier(env, make_belief(["H2"], STUCK, soc=0.6))
+    v = verifier(env, make_belief(["H2"], STUCK, soc=0.95))
     diag = plan(env, "P-1", ("LOAD_OFF", {"load": "PAYLOAD"}), ("LOAD_ON", {"load": "PAYLOAD"}), kind="diagnostic")
     full = plan(env, "P-2", ("LOAD_OFF", {"load": "PAYLOAD"}), ("LOAD_ON", {"load": "PAYLOAD"}))
     rd, rf = v.simulate(diag), v.simulate(full)

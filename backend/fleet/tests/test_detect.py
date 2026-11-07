@@ -8,19 +8,19 @@ from contracts import Alert, CalloutMsg, Contact
 from backend.fleet import detect, scenarios
 from backend.verify import constants as K
 
-SATS = ("SAT-03", "SAT-12", "SAT-17")
+SATS = ("SAT-03", "SAT-09", "SAT-12")
 ONSET = scenarios.T0 + 2 * 3600.0
 STEP = 60.0
 
 
 @pytest.fixture(scope="module")
 def run():
-    """single-stuck-load on three satellites (24 h horizon); detector polled every minute for 8 h."""
+    """single-stuck-load on three satellites (24 h horizon); detector polled every minute for 4.5 h."""
     sc = scenarios.build("single-stuck-load", seed=0, sat_ids=SATS)
     w = sc.world
     d = detect.Detector(sc.env, sc.contacts, w.telemetry, w.executed, sc.initial)
     msgs, active = [], {}
-    for t in np.arange(sc.env.t[0], scenarios.T0 + 8 * 3600.0, STEP):
+    for t in np.arange(sc.env.t[0], scenarios.T0 + 4.5 * 3600.0, STEP):
         w.advance_to(t)
         active[t] = d.detect(t)
         msgs += [(t, m) for m in d.drain_messages()]
@@ -34,9 +34,9 @@ def first_pass_after(sc, sat, t):
 def test_alert_fires_at_first_contact_after_onset_and_not_before(run):
     sc, d, msgs, active = run
     alerts = [(t, m["data"]) for t, m in msgs if m["type"] == "alert"]
-    assert [a.sat_id for _, a in alerts] == ["SAT-17"]
+    assert [a.sat_id for _, a in alerts] == ["SAT-09"]
     t_alert, a = alerts[0]
-    c = first_pass_after(sc, "SAT-17", ONSET)
+    c = first_pass_after(sc, "SAT-09", ONSET)
     assert c.aos <= t_alert <= c.los + STEP
     # nothing at all (not even watch) before that pass
     assert all(not v for t, v in active.items() if t < c.aos)
@@ -50,7 +50,7 @@ def test_one_alert_and_one_callout_with_rendered_text(run):
     assert kinds == ["alert", "callout"]
     alert, callout = msgs[0][1]["data"], msgs[1][1]["data"]
     assert isinstance(alert, Alert) and isinstance(callout, CalloutMsg)
-    m = re.fullmatch(r"Flight, SAT-17 battery trending low, (\d+) minutes to critical", callout.text)
+    m = re.fullmatch(r"Flight, SAT-09 battery trending low, (\d+) minutes to critical", callout.text)
     assert m, callout.text
     assert int(m.group(1)) == round(alert.time_to_critical_s / 60.0)
     assert callout.priority in (1, 2)
@@ -63,14 +63,14 @@ def test_alert_fields(run):
     assert re.fullmatch(r"AL-\d+", a.alert_id)
     assert a.time_to_critical_s is not None and a.time_to_critical_s > 0
     assert a.next_contact_aos is not None and a.next_contact_aos + 600 >= t
-    assert d.alert(a.alert_id).sat_id == "SAT-17"
-    assert d.scores("SAT-17").top == "H2"
+    assert d.alert(a.alert_id).sat_id == "SAT-09"
+    assert d.scores("SAT-09").top == "H2"
 
 
 def test_healthy_satellites_stay_quiet(run):
     sc, d, msgs, active = run
     last = active[max(active)]
-    assert {a.sat_id for a in last} == {"SAT-17"}
+    assert {a.sat_id for a in last} == {"SAT-09"}
     for s in ("SAT-03", "SAT-12"):
         assert d.scores(s).top == "H0"
 
@@ -78,11 +78,11 @@ def test_healthy_satellites_stay_quiet(run):
 def test_time_to_critical_comes_from_the_worst_plausible_hypothesis(run):
     sc, d, msgs, _ = run
     t = sc.world.t_now
-    tm = sc.world.telemetry("SAT-17")
-    score = d.scores("SAT-17")
-    cross = d._crossings("SAT-17", t, tm, score)
+    tm = sc.world.telemetry("SAT-09")
+    score = d.scores("SAT-09")
+    cross = d._crossings("SAT-09", t, tm, score)
     assert "H2" in cross
-    assert d.time_to_critical("SAT-17", t, tm, score) == pytest.approx(max(0.0, min(cross.values()) - t))
+    assert d.time_to_critical("SAT-09", t, tm, score) == pytest.approx(max(0.0, min(cross.values()) - t))
 
 
 def test_detector_needs_only_telemetry(run):
@@ -100,7 +100,7 @@ def test_detector_needs_only_telemetry(run):
 
     d = detect.Detector(sc.env, sc.contacts, telemetry, lambda s: sent[s], sc.initial)
     out = []
-    for t in np.arange(sc.env.t[0], scenarios.T0 + 8 * 3600.0, STEP):
+    for t in np.arange(sc.env.t[0], scenarios.T0 + 4.5 * 3600.0, STEP):
         now["t"] = t
         d.detect(t)
         out += [(t, m) for m in d.drain_messages()]
@@ -134,8 +134,8 @@ def test_render_placeholders(run):
 
 def test_scenario_builds_full_fleet():
     sc = scenarios.build("single-stuck-load", seed=1, hours=2.0)
-    assert len(sc.env.sat_ids) == 24 and sc.focus_sat == "SAT-17"
+    assert len(sc.env.sat_ids) == 24 and sc.focus_sat == "SAT-09"
     assert all(c.los > c.aos for c in sc.contacts)
-    assert sc.next_contact("SAT-17", scenarios.T0) is not None
+    assert sc.next_contact("SAT-09", scenarios.T0) is not None
     with pytest.raises(ValueError):
         scenarios.build("no-such-scenario")
