@@ -50,7 +50,8 @@ def test_simulate_and_tier(at_alert):
              commands=[Command(t_exec=t + 60, name="SET_PAYLOAD_DUTY", args={"duty": 0.2})])
     r = be.simulate(p, "all", 20)
     assert r.passes_all and "H2" in r.plausible
-    assert be.tier(p, r) == (2, None)
+    tier, rule = be.tier(p, r)
+    assert (tier, rule) == ((1, "FR-2") if r.worst_margin_soc >= 0.20 else (2, None))
 
 
 def test_execute_rejects_the_past_and_runs_a_diagnostic():

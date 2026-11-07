@@ -84,3 +84,9 @@ DETECT_PROJECTION_S = 12 * 3600.0
 # comes inside the horizon, watch if the satellite is anomalous but SOC never gets there.
 CRITICAL_TTC_S = 3 * 3600.0
 CONTACT_MARGIN_S = 600.0
+
+# ---------------- tier policy (T23) ----------------
+# Tier 1 (auto-execute under a flight rule) needs at least this worst-case SOC margin above SOC_MIN.
+TIER1_MARGIN = 0.20
+# A diagnostic only has to pass verification over its own window (B's 21:58Z rule).
+TIER1_MARGIN_DIAGNOSTIC = 0.0
