@@ -3,6 +3,10 @@
 Scenario (like `single-stuck-load`): SAT-07 drains because its AUX load is stuck on. Everything here is made-up
 mock data with a toy power budget; none of it is physics and none of it is shown as real.
 Deterministic: the same calls give the same results.
+
+Diagnostic (T20): before a test, three hypotheses are plausible. A verified diagnostic is Tier 1 (mock flight rule
+FR-1) and executing it moves the mock clock to the end of the test. If it switched AUX off on SAT-07, the scores
+then confirm H2: the load did not drop, so the AUX relay is stuck on.
 """
 from __future__ import annotations
 
@@ -35,12 +39,19 @@ _SOC_MIN = 0.20
 
 _SCORES = {"H0": 0.04, "H1": 0.16, "H2": 0.58, "H3": 0.17, "H4": 0.03, "H5": 0.02}
 _PLAUSIBLE = ["H1", "H2", "H3"]
+_SCORES_CONFIRMED = {"H0": 0.01, "H1": 0.02, "H2": 0.93, "H3": 0.02, "H4": 0.01, "H5": 0.01}
+_PLAUSIBLE_CONFIRMED = ["H2"]
+DIAGNOSTIC_FLIGHT_RULE = "FR-1"  # mock only; real flight rules live in backend/fleet/flight_rules.py
+_DWELL_S = 60.0
 
 
 class MockBackend:
     def __init__(self, t0: float = MOCK_T0) -> None:
         self.t0 = t0
+        self._t = t0
         self._n_sims = 0
+        self._confirmed: set[str] = set()
+        self.executed: list[Plan] = []
         h = 3600.0
         self._contacts = sorted(
             [
@@ -56,7 +67,7 @@ class MockBackend:
 
     # ---- clock
     def now(self) -> float:
-        return self.t0
+        return self._t
 
     # ---- fleet
     def detect(self, t: float) -> list[Alert]:
@@ -84,7 +95,20 @@ class MockBackend:
         ]
 
     def tier(self, plan: Plan, sim: SimResult):
+        if plan.kind == "diagnostic" and sim.passes_all:
+            return 1, DIAGNOSTIC_FLIGHT_RULE
         return 2, None
+
+    def execute(self, plan: Plan) -> float:
+        if any(c.t_exec < self._t for c in plan.commands):
+            raise ValueError("t_exec is before the current sim time")
+        self.executed.append(plan)
+        if plan.kind == "diagnostic":
+            self._t = max(self._t, max(c.t_exec for c in plan.commands) + _DWELL_S)
+            aux_off = any(c.name == "LOAD_OFF" and c.args.get("load") == "AUX" for c in plan.commands)
+            if plan.sat_id == MOCK_SAT and aux_off:
+                self._confirmed.add(plan.sat_id)
+        return self._t
 
     # ---- eps
     def telemetry(self, sat_id: str, t_from: float, t_to: float) -> dict[str, list[float]]:
@@ -114,6 +138,8 @@ class MockBackend:
         if sat_id != MOCK_SAT:
             return HypothesisScores(scores={"H0": 0.95, "H1": 0.01, "H2": 0.01, "H3": 0.01, "H4": 0.01, "H5": 0.01},
                                     plausible=["H0"])
+        if sat_id in self._confirmed:
+            return HypothesisScores(scores=dict(_SCORES_CONFIRMED), plausible=list(_PLAUSIBLE_CONFIRMED))
         return HypothesisScores(scores=dict(_SCORES), plausible=list(_PLAUSIBLE))
 
     # ---- orbit
@@ -150,6 +176,8 @@ class MockBackend:
             aux_shed = _AUX_W if aux_off and h != "H2" else 0.0  # under H2 the AUX switch is stuck on
             shed = (1.0 - uptime) * _PAYLOAD_W + aux_shed + heater_shed
             margin = round(_BASE_MARGIN + _SOC_PER_W * (shed - _DEFICIT_W[h]), 4)
+            if plan.kind == "diagnostic":  # a short test inside one pass: no lasting change to the budget
+                margin, uptime = _BASE_MARGIN, 1.0
             margins[h] = margin
             per_hyp[h] = HypStats(
                 pass_rate=min(1.0, max(0.0, 0.5 + 25.0 * margin)),
@@ -159,7 +187,8 @@ class MockBackend:
                 t_bat_max_c=24.0,
                 payload_uptime=uptime,
             )
-        plausible = [h for h in _PLAUSIBLE if h in per_hyp] if plan.sat_id == MOCK_SAT else ["H0"]
+        plausible = self.score_hypotheses(plan.sat_id).plausible
+        plausible = [h for h in plausible if h in per_hyp] if plan.sat_id == MOCK_SAT else ["H0"]
         plausible = [h for h in plausible if h in per_hyp] or hyps
         self._n_sims += 1
         return SimResult(
@@ -180,7 +209,7 @@ class MockBackend:
         for r in sorted(requests, key=lambda r: (-r.priority, r.deadline_t, r.plan_id)):
             slot = None
             for c in self._contacts:
-                if c.sat_id != r.sat_id or c.aos < self.t0 or c.aos + r.duration_s > min(c.los, r.deadline_t):
+                if c.sat_id != r.sat_id or c.aos < self._t or c.aos + r.duration_s > min(c.los, r.deadline_t):
                     continue
                 start = c.aos
                 for st, s0, s1 in busy:

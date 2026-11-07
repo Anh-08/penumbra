@@ -57,6 +57,14 @@ class Backend(Protocol):
     # sched (B2)
     def schedule(self, requests: list[ScheduleRequest]) -> ScheduleResult: ...
 
+    # execution (B1, wired at T22)
+    def execute(self, plan: Plan) -> float:
+        """Uplink an approved (or Tier 1) plan; its commands run at their t_exec. For kind "diagnostic", return
+        only once the test's telemetry is downlinked (the sim clock moves past the last step plus one dwell), so
+        the next score_hypotheses includes it. Returns the sim time after execution, POSIX seconds UTC.
+        Raise ValueError if the plan cannot run (for example a t_exec in the past)."""
+        ...
+
 
 class Recorder(Protocol):
     def record(
