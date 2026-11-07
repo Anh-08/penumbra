@@ -186,3 +186,21 @@ class OrbitModel:
         if sat_id not in self.assets.satellites:
             raise KeyError(sat_id)
         return next((c for c in self.contacts() if c.sat_id == sat_id and c.los > t), None)
+
+    def positions(self, t: float) -> dict[str, dict[str, float]]:
+        """Return geodetic fleet positions and illumination at POSIX time t."""
+        from .globe import positions
+
+        return positions(self, t)
+
+    def orbit_path(self, sat_id: str, t: float, minutes: float | None = None) -> list[list[float]]:
+        """Return a geodetic track, defaulting to one orbit ahead."""
+        from .globe import orbit_path
+
+        return orbit_path(self, sat_id, t, minutes)
+
+    def sun_direction(self, t: float) -> list[float]:
+        """Return the Earth-fixed Sun direction at POSIX time t."""
+        from .globe import sun_direction
+
+        return sun_direction(self, t)

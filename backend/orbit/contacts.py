@@ -22,7 +22,11 @@ def beta_from_vectors(position_km: np.ndarray, velocity_km_s: np.ndarray, sun_km
 
 
 def find_contacts(model) -> list[Contact]:
-    """Pair Skyfield rise and set events and retain their peak elevation."""
+    """Pair Skyfield events; retain usable passes of at least 120 seconds.
+
+    A pass already underway at the horizon start has no rise event inside the
+    window and is omitted, so every returned contact has a complete AOS/LOS.
+    """
     start = model.assets.timescale.from_datetime(
         datetime.fromtimestamp(float(model.t[0]), timezone.utc)
     )
@@ -46,7 +50,7 @@ def find_contacts(model) -> list[Contact]:
                     elevation, _, _ = (satellite - station.position).at(event_time).altaz()
                     peak = max(peak, float(elevation.degrees))
                 elif kind == 2 and aos is not None:
-                    if timestamp > aos:
+                    if timestamp - aos >= 120.0:
                         windows.append(
                             Contact(
                                 sat_id=sat_id,
