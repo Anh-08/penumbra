@@ -1,0 +1,11 @@
+[project]
+name = "penumbra"
+version = "0.1.0"
+description = "Verified AI mission ops for a 24-satellite LEO fleet: AI proposes, physics verifies, humans approve."
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+# importlib mode: several packages can each have a tests/ folder with same-named files.
+addopts = "--import-mode=importlib"
+pythonpath = ["."]
+testpaths = ["contracts", "backend", "tests"]

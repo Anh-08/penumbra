@@ -1,0 +1,14 @@
+# Direct dependencies, pinned at event start (Sat 2026-11-07). Full freeze: docs/pinned-versions.txt
+# Python 3.11. Owner B1: post a REQUEST on the AGENT BOARD to add one.
+skyfield==1.55
+sgp4==2.27
+numpy==2.4.6
+ortools==9.15.6755
+fastapi==0.162.2
+uvicorn[standard]==0.54.0
+websockets==17.4
+pydantic==2.14.3
+python-dotenv==1.2.4
+google-genai==3.0.0
+httpx==0.28.1
+pytest==9.2.0

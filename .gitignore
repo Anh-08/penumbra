@@ -7,3 +7,11 @@ node_modules/
 frontend/dist/
 runs/*
 !runs/demo/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.vite/
+.DS_Store
