@@ -54,6 +54,20 @@ def test_simulate_and_tier(at_alert):
     assert (tier, rule) == ((1, "FR-2") if r.worst_margin_soc >= 0.20 else (2, None))
 
 
+def test_rank_and_matrix_follow_the_verifier(at_alert):
+    sc, be, t, _ = at_alert
+    c = be.next_contact("SAT-17", t)
+    mk = lambda pid, cmds: Plan(plan_id=pid, sat_id="SAT-17", kind="plan", uplink=c, created_by="test",  # noqa: E731
+                                commands=[Command(t_exec=t + 60, name=n, args=a) for n, a in cmds])
+    be.simulate(mk("P-21", [("LOAD_OFF", {"load": "AUX"})]), "all", 20)          # fails: the relay is stuck
+    be.simulate(mk("P-22", [("SET_PAYLOAD_DUTY", {"duty": 0.2})]), "all", 20)
+    rk = be.rank("SAT-17")
+    m = be.matrix("SAT-17")
+    assert [r.plan_id for r in m.results] == rk.ordered
+    assert m.results[0].plan_id == rk.ordered[0] and m.results[0].passes_all and m.complete
+    assert rk.ordered.index("P-22") < rk.ordered.index("P-21")
+
+
 def test_execute_rejects_the_past_and_runs_a_diagnostic():
     sc = scenarios.build("single-stuck-load", seed=0, sat_ids=SATS)
     be = FleetBackend(sc)

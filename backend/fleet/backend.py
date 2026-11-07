@@ -12,8 +12,8 @@ from typing import Literal
 
 import numpy as np
 
-from contracts import (Alert, Contact, HypothesisScores, PeerCompare, Plan, ScheduleRequest, ScheduleResult, SimResult,
-                       TriageEntry)
+from contracts import (Alert, Contact, HypothesisScores, MatrixMsg, PeerCompare, Plan, RankResult, ScheduleRequest,
+                       ScheduleResult, SimResult, TriageEntry)
 from backend.eps.planning import InitialState
 from backend.sched import UplinkScheduler
 from backend.verify import constants as K
@@ -40,6 +40,7 @@ class FleetBackend:
         self.detector = Detector(self.env, scenario.contacts, self.world.telemetry, self.world.executed,
                                  scenario.initial)
         self.verifier = Verifier(self.env, self._belief)
+        self.scheduler = UplinkScheduler(scenario.contacts)
         self._scores: dict[str, scoring.Score] = {}       # fresh diagnosis scores (score_hypotheses)
         self._status: dict[str, str] = {}                  # triage status per satellite
         self._last_alert: dict[str, Alert] = {}            # keeps a handled satellite visible in triage
@@ -122,12 +123,18 @@ class FleetBackend:
 
     # ---- sched
     def schedule(self, requests: list[ScheduleRequest]) -> ScheduleResult:
-        """Uplink slots from now on. The scheduler places slots from each contact's AOS, so contacts already
-        in progress are cut to start now and finished ones are dropped (no slot can be in the past)."""
-        now = self.now()
-        live = [c if c.aos >= now else c.model_copy(update={"aos": now})
-                for c in self.scenario.contacts if c.los > now + 1.0]
-        return UplinkScheduler(live).schedule(requests)
+        """Uplink slots from now on (B2's scheduler never books a slot before `now`)."""
+        return self.scheduler.schedule(requests, now=self.now())
+
+    def rank(self, sat_id: str) -> RankResult:
+        return self.verifier.rank(sat_id)
+
+    def matrix(self, sat_id: str, complete: bool = True) -> MatrixMsg:
+        """The plan x hypothesis matrix for the UI. Results are in the backend's rank order (results[0] is
+        the recommended plan) so the frontend never ranks; feasibility shows as the sat status in triage."""
+        order = self.verifier.rank(sat_id).ordered
+        results = [self.verifier.latest(pid) for pid in order]
+        return MatrixMsg(sat_id=sat_id, results=[r for r in results if r is not None], complete=complete)
 
     # ---- execution
     def execute(self, plan: Plan) -> float:
