@@ -152,6 +152,7 @@ export function createScene(container, initialState, onSelect) {
       },
       label: {
         text: sat.sat_id,
+        show: sat.sat_id === 'SAT-07',
         font: '10px monospace',
         fillColor: Color.WHITE.withAlpha(0.7),
         outlineColor: Color.BLACK,
@@ -181,11 +182,12 @@ export function createScene(container, initialState, onSelect) {
 
   let previousFrame = performance.now();
   let previousTrackTime = initialState.t;
+  let motionActive = true;
   const moveCamera = () => {
     const now = performance.now();
     const elapsed = Math.min((now - previousFrame) / 1000, 0.1);
     previousFrame = now;
-    viewer.camera.rotate(Cartesian3.UNIT_Z, elapsed * 0.018);
+    if (motionActive) viewer.camera.rotate(Cartesian3.UNIT_Z, elapsed * 0.018);
   };
   viewer.scene.preRender.addEventListener(moveCamera);
 
@@ -220,5 +222,14 @@ export function createScene(container, initialState, onSelect) {
     }
   };
   update(initialState);
-  return { viewer, update, destroy: () => { viewer.scene.preRender.removeEventListener(moveCamera); viewer.destroy(); } };
+  return {
+    viewer,
+    update,
+    setHighlights: (focused, alerted) => {
+      const visible = new Set([focused, ...alerted]);
+      for (const [satId, marker] of markers) marker.label.show = visible.has(satId);
+    },
+    setMotionActive: (active) => { motionActive = active; },
+    destroy: () => { viewer.scene.preRender.removeEventListener(moveCamera); viewer.destroy(); },
+  };
 }

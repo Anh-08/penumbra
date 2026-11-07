@@ -1,0 +1,121 @@
+import { formatCountdown, formatDuration } from './panelState.js';
+
+const HYPOTHESES = ['H0', 'H1', 'H2', 'H3', 'H4', 'H5'];
+
+function PanelHeading({ children, source = 'SIM' }) {
+  return <div className="panel-heading"><span>{children}</span><span className="source-tag">{source}</span></div>;
+}
+
+function timeLabel(t) {
+  if (!Number.isFinite(t)) return '—';
+  return new Date(t * 1000).toISOString().slice(11, 19);
+}
+
+function statusLabel(status) {
+  return {
+    queued: 'QUEUED',
+    working: 'AI WORKING',
+    auto_executed: 'AUTO-EXECUTED',
+    awaiting_approval: 'NEEDS APPROVAL',
+    executed: 'EXECUTED',
+    safe_mode_recommended: 'SAFE MODE RECOMMENDED',
+  }[status] ?? 'QUEUED';
+}
+
+export function TriageQueue({ alerts, now, selected, onSelect }) {
+  return <section className="hud-panel triage-panel" aria-label="Triage queue">
+    <PanelHeading>TRIAGE QUEUE</PanelHeading>
+    <div className="triage-scroll">
+      {alerts.length === 0 && <div className="panel-empty">AWAITING FLEET ALERTS</div>}
+      {alerts.map((alert, index) => <button
+        className={`triage-row ${selected === alert.sat_id ? 'focused' : ''}`}
+        key={alert.alert_id}
+        onClick={() => onSelect(alert.sat_id)}
+      >
+        <span className="triage-rank num">{String(index + 1).padStart(2, '0')}</span>
+        <span className="triage-main">
+          <span className="triage-line"><strong>{alert.sat_id}</strong><span className={`severity ${alert.severity}`}>{alert.severity.toUpperCase()}</span></span>
+          <span className={`triage-status ${alert.status}`}>{statusLabel(alert.status)}</span>
+        </span>
+        <span className="triage-times">
+          <span className="aos num">AOS {formatCountdown(alert.next_contact_aos, now)}</span>
+          <span className="ttc num">TTC {formatDuration(alert.time_to_critical_s)}</span>
+        </span>
+      </button>)}
+    </div>
+  </section>;
+}
+
+export function HypothesesPanel({ satId, message }) {
+  const scores = message?.scores ?? {};
+  const labels = message?.labels ?? {};
+  const plausible = new Set(message?.plausible ?? []);
+  const hypotheses = [...HYPOTHESES].sort((a, b) => (scores[b] ?? -1) - (scores[a] ?? -1));
+  const leader = hypotheses.find((h) => Number.isFinite(scores[h]));
+  return <section className="hud-panel hypothesis-panel" aria-label="Hypothesis scores">
+    <PanelHeading>HYPOTHESES · {satId}</PanelHeading>
+    {!message && <div className="panel-empty">AWAITING BACKEND SCORES</div>}
+    {message && <div className="hypothesis-rows">
+      {hypotheses.map((hypothesis) => {
+        const value = scores[hypothesis];
+        const hasScore = Number.isFinite(value);
+        return <div className={`hypothesis-row ${plausible.has(hypothesis) ? '' : 'ruled-out'} ${leader === hypothesis ? 'leading' : ''}`} key={hypothesis}>
+          <span className="hyp-code num">{hypothesis}</span>
+          <span className="hyp-label">{labels[hypothesis] ?? '—'}</span>
+          <span className="hyp-bar"><span style={{ transform: `scaleX(${hasScore ? Math.max(0, Math.min(1, value)) : 0})` }} /></span>
+          <span className="hyp-value num">{hasScore ? `${Math.round(value * 100)}%` : '—'}</span>
+          {!plausible.has(hypothesis) && <span className="ruled-label">RULED OUT</span>}
+        </div>;
+      })}
+    </div>}
+  </section>;
+}
+
+function stageForTool(tool) {
+  if (tool === 'simulate') return 'VERIFIES';
+  if (tool === 'request_approval') return 'APPROVES';
+  return 'PROPOSES';
+}
+
+export function TracePanel({ callout, rows, mode }) {
+  return <section className="hud-panel trace-panel" aria-label="Agent tool trace">
+    <div className="trace-caption">{callout ?? 'Awaiting mission events'}</div>
+    <div className="trace-heading"><span>TOOL-CALL TRACE</span><span className="source-tag">{mode}</span></div>
+    <div className="trace-rows">
+      {rows.length === 0 && <div className="trace-empty">No agent tools have run yet.</div>}
+      {rows.slice(-4).map((row) => <div className="trace-row" key={row.id}>
+        <time className="num">{timeLabel(row.ts)}</time>
+        <span className="trace-stage">{stageForTool(row.tool)}</span>
+        <strong>{row.tool}</strong>
+        <span className="trace-args num" title={row.args}>{row.args}</span>
+        <span className="trace-result num" title={row.result}>→ {row.result}</span>
+      </div>)}
+    </div>
+  </section>;
+}
+
+export function ProvenanceLegend({ localPreview }) {
+  return <section className="hud-panel provenance-legend" aria-label="Real and simulated data legend">
+    <div className="legend-line"><span className="legend-swatch real" /><strong>REAL</strong><span>Live orbits · Sun · stations · contacts</span></div>
+    <div className="legend-line"><span className="legend-swatch simulated" /><strong>SIMULATED</strong><span>{localPreview ? 'Preview orbit · power · thermal · faults' : 'Power · thermal · faults'}</span></div>
+  </section>;
+}
+
+export function TopBar({ phase, mode, time, speed, hasVerification }) {
+  const activeStage = phase === 'approval' || phase === 'fastforward' || phase === 'reveal'
+    ? 2 : hasVerification ? 1 : 0;
+  return <header className="top-bar">
+    <div className="top-brand"><strong>PENUMBRA</strong><span>24-SATELLITE MISSION CONTROL</span></div>
+    <div className="stage-stepper" aria-label="AI proposes, physics verifies, humans approve">
+      {['AI PROPOSES', 'PHYSICS VERIFIES', 'HUMAN APPROVES'].map((label, index) => <div className={`stage ${activeStage === index ? 'active' : ''}`} key={label}>{label}</div>)}
+    </div>
+    <div className="top-status"><span className="mode-chip">{mode}</span><time className="num">{timeLabel(time)} UTC</time><span className="speed-chip num">{speed === 0 ? 'PAUSED' : `${speed}×`}</span></div>
+  </header>;
+}
+
+export function DirectorSlot() {
+  return <section className="hud-panel director-slot" aria-label="Flight Director">
+    <PanelHeading source="HUMAN">FLIGHT DIRECTOR</PanelHeading>
+    <div className="director-wait">Waiting for a verified plan</div>
+  </section>;
+}
