@@ -2,7 +2,7 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import { buildFleetState } from './mockFleet.js';
 import { createScene } from './scene.js';
 import { createPanelState, reducePanel } from './panelState.js';
-import { createMatrixState, reduceMatrix } from './matrixState.js';
+import { createMatrixState, reduceMatrix, scheduleConflicts } from './matrixState.js';
 import { MatrixOverlay } from './Matrix.jsx';
 import {
   DirectorSlot, HypothesesPanel, ProvenanceLegend, TopBar, TracePanel, TriageQueue,
@@ -130,7 +130,8 @@ function App() {
     </>}
 
     {matrixOpen && <MatrixOverlay satId={selected} matrix={activeMatrix}
-      hypotheses={panel.hypotheses[selected]} schedule={matrix.schedule}
+      hypotheses={panel.hypotheses[selected]}
+      conflict={scheduleConflicts(matrix.schedule, matrix.planSat)} status={matrix.statusBySat[selected]}
       selectedPlanId={selectedPlanId} onSelectPlan={setSelectedPlanId} />}
 
     <ProvenanceLegend localPreview={localPreview} />
