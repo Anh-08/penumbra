@@ -1,0 +1,26 @@
+[
+  {
+    "station_id": "SVALBARD",
+    "name": "Svalbard (Norway)",
+    "lat_deg": 78.23,
+    "lon_deg": 15.40,
+    "alt_m": 450,
+    "approximate": true
+  },
+  {
+    "station_id": "TROLL",
+    "name": "Troll (Antarctica)",
+    "lat_deg": -72.01,
+    "lon_deg": 2.54,
+    "alt_m": 1275,
+    "approximate": true
+  },
+  {
+    "station_id": "FAIRBANKS",
+    "name": "Fairbanks (Alaska)",
+    "lat_deg": 64.86,
+    "lon_deg": -147.85,
+    "alt_m": 200,
+    "approximate": true
+  }
+]

@@ -1,0 +1,3 @@
+# Contracts need approval from a human code owner who is not the PR author.
+/CONTRACTS.md @Nguyen-Le-Tuan @Anh-08
+/contracts/ @Nguyen-Le-Tuan @Anh-08

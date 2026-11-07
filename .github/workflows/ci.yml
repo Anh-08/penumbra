@@ -1,0 +1,52 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  path-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Directory ownership
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: python3 scripts/path_guard.py "$HEAD_REF" "origin/$BASE_REF"
+
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      PENUMBRA_OFFLINE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install and test
+        run: |
+          if [ -f backend/requirements.txt ]; then
+            pip install -r backend/requirements.txt
+            python -m pytest -q || [ $? -eq 5 ]   # exit 5 = no tests collected yet
+          else
+            echo "no backend yet"
+          fi
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Build
+        run: |
+          if [ -f frontend/package.json ]; then
+            cd frontend && npm ci && npm run build
+          else
+            echo "no frontend yet"
+          fi
