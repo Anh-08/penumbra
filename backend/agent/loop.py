@@ -3,6 +3,8 @@
 Every model request/response and tool call/result goes to the recorder (CONTRACTS.md flight recorder kinds).
 The final text must pass the narration rule; if not, the model is re-asked at most MAX_NARRATION_RETRIES times,
 after which the run ends with no narration and the UI shows tool results only.
+
+A live model (`model.live` is true, e.g. GeminiModel) must run with a real recorder: every live run is recorded.
 """
 from __future__ import annotations
 
@@ -52,12 +54,18 @@ def run_agent(
     system: str = SYSTEM_PROMPT,
     max_steps: int = MAX_STEPS,
 ) -> AgentRun:
+    if getattr(model, "live", False) and (recorder is None or isinstance(recorder, NullRecorder)):
+        raise ValueError("a live model run must be recorded: pass a flight recorder (see session.record_run)")
     rec = recorder if recorder is not None else NullRecorder()
+    model_name = getattr(model, "name", type(model).__name__)
     messages: list[Message] = [Message(role="user", text=goal)]
     retries = 0
 
     for step in range(1, max_steps + 1):
-        rec.record("model_request", {"step": step, "n_messages": len(messages), "narration_retry": retries})
+        rec.record(
+            "model_request",
+            {"step": step, "n_messages": len(messages), "narration_retry": retries, "model": model_name},
+        )
         started = time.perf_counter()
         response = model.generate(system, list(messages), TOOL_SCHEMAS)
         latency_ms = (time.perf_counter() - started) * 1000.0
