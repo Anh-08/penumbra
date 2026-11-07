@@ -39,8 +39,13 @@ def reply(*, text=None, calls=(), tokens=100, signature=None, thought=None, call
     )
 
 
-def http_error(code):
+def http_error(code, retry_delay=None):
     body = {"error": {"code": code, "message": "fake", "status": "FAKE"}}
+    if retry_delay is not None:  # shape of a real free-tier 429
+        body["error"]["details"] = [
+            {"@type": "type.googleapis.com/google.rpc.QuotaFailure", "violations": []},
+            {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": retry_delay},
+        ]
     return errors.ClientError(code, body) if code < 500 else errors.ServerError(code, body)
 
 
@@ -148,6 +153,42 @@ def test_gives_up_after_max_attempts():
         ask(m)
     assert exc.value.attempts == 3 and exc.value.status == 503
     assert len(sleeps) == 2
+
+
+def test_429_waits_for_the_server_retry_delay():
+    m, sleeps = make([http_error(429, retry_delay="22s"), reply(text="ok")], jitter=lambda: 0.5)
+    assert ask(m).text == "ok"
+    assert sleeps == [22.5]  # retryDelay plus jitter, longer than the 0.75 s backoff
+
+
+def test_retry_delay_never_shortens_the_backoff():
+    m, sleeps = make([http_error(503), http_error(503), http_error(429, retry_delay="0.5s"), reply(text="ok")])
+    ask(m)
+    assert sleeps == [1.0, 2.0, 4.0]
+
+
+def test_a_long_quota_wait_is_capped_once():
+    m, sleeps = make([http_error(429, retry_delay="36897s"), reply(text="ok")], jitter=lambda: 0.0)
+    assert ask(m).text == "ok"
+    assert sleeps == [gemini.MAX_RETRY_AFTER_S]
+
+
+def test_a_second_long_quota_wait_fails_instead_of_hanging():
+    m, sleeps = make([http_error(429, retry_delay="3600s")] * 2 + [reply(text="never")], jitter=lambda: 0.0)
+    with pytest.raises(GeminiUnavailable, match="quota") as exc:
+        ask(m)
+    assert exc.value.status == 429 and exc.value.attempts == 2
+    assert sleeps == [gemini.MAX_RETRY_AFTER_S] and len(m._client.models.requests) == 2
+
+
+def test_retry_after_header_is_honoured():
+    class Throttled(Exception):
+        code = 429
+        response = httpx.Response(429, headers={"Retry-After": "7"})
+
+    m, sleeps = make([Throttled(), reply(text="ok")], jitter=lambda: 0.0)
+    assert ask(m).text == "ok"
+    assert sleeps == [7.0]
 
 
 def test_transport_errors_are_retried():
