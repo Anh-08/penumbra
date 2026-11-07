@@ -15,3 +15,5 @@ pytest==9.2.0
 # Reading data/pcoe/ (.mat) and data/birds/ (.xlsx); requested by A on the board.
 scipy==1.17.1
 openpyxl==3.1.5
+# Plots for results files (T30 PNG); requested by B2 on the board.
+matplotlib==3.11.2

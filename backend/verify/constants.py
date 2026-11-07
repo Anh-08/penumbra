@@ -37,3 +37,23 @@ SIGMA = {   # about 1.5x the nominal RMS measured over 6 seeds x beta 0/25/45 de
 WITHIN_EFFECTIVE_N = 6
 # Next-pass residual uses the mean of its first samples only (before any commanded step).
 FAR_SAMPLES = 6
+
+# ---------------- limits (hard constraints; T12 uses them too) ----------------
+SOC_MIN = 0.30
+
+# ---------------- detection (T34) ----------------
+# A satellite is anomalous when the nominal hypothesis drops below this posterior.
+DETECT_ANOMALY_P_H0 = 0.5
+# Detection asks "is anything wrong?", so faults are rare a priori (diagnosis after an alert uses PRIOR).
+DETECT_PRIOR = {"H0": 0.75, "H1": 0.05, "H2": 0.05, "H3": 0.05, "H4": 0.05, "H5": 0.05}
+# Score a satellite twice per pass: after this many samples (first look) and when the pass ends.
+DETECT_MIN_NEW_SAMPLES = 6
+# Detection looks at the most recent passes only, which bounds its cost.
+DETECT_WINDOW_PASSES = 4
+# SOC projection for time to critical stops after this long.
+DETECT_PROJECTION_S = 12 * 3600.0
+# Severity from time to critical (SOC reaching SOC_MIN under the worst plausible hypothesis):
+# critical if it comes within CRITICAL_TTC_S or before the next contact (+ margin), warning if it
+# comes inside the horizon, watch if the satellite is anomalous but SOC never gets there.
+CRITICAL_TTC_S = 3 * 3600.0
+CONTACT_MARGIN_S = 600.0

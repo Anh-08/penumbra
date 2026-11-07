@@ -3,7 +3,12 @@ agent's registry of plans, simulation results, alerts and approvals.
 
 Bad input never raises out of `dispatch`; the model gets `{"error": ...}` back and can try again.
 Every result is plain JSON (no NaN, no pydantic objects), ready for the model and the flight recorder.
-`approve()` is the check behind POST /api/approve.
+`approve()` is the check behind POST /api/approve; `execute()` runs an approved plan afterwards.
+
+Diagnostic tests (T20): `propose_diagnostic_test` time-tags untagged steps one DIAGNOSTIC_STEP_S apart inside
+the pass. A Tier 1 plan (pre-approved flight rule) executes as soon as `request_approval` is called. After a
+diagnostic executes, `propose_plan` for that satellite is refused until `score_hypotheses` has been called
+again, so every plan is built on the diagnostic's evidence.
 """
 from __future__ import annotations
 
@@ -28,6 +33,8 @@ from contracts import (
     SimResult,
 )
 
+from backend.verify.diagnostics import DWELL_S
+
 from . import safety
 from .interfaces import Backend, NullRecorder, Recorder
 from .safety import SafetyError
@@ -36,6 +43,7 @@ from .tools import DEFAULT_MONTE_CARLO, MAX_MONTE_CARLO, TOOL_SCHEMAS
 TELEMETRY_WINDOW_S = 3 * 3600.0  # default get_telemetry window, ending now
 MAX_TELEMETRY_POINTS = 120  # keep tool results small for the model
 UPLINK_DURATION_S = 60.0  # station time requested per plan uplink
+DIAGNOSTIC_STEP_S = DWELL_S  # dwell per diagnostic step, same as backend.verify.diagnostics
 
 
 class ToolArgError(ValueError):
@@ -46,6 +54,7 @@ class ToolArgError(ValueError):
 class ToolOutcome:
     result: dict[str, Any]
     plan_hash: str | None = None  # copied to the recorder event when the call concerns one plan
+    events: tuple[tuple[str, dict[str, Any]], ...] = ()  # extra recorder events (kind, payload), e.g. execution
 
 
 class Dispatcher:
@@ -60,6 +69,9 @@ class Dispatcher:
         self.assignments: dict[str, Assignment] = {}  # latest scheduler assignment per plan_id
         self.last_schedule: ScheduleResult | None = None
         self._decided: set[str] = set()
+        self._executed: set[str] = set()
+        self._flight_rules: dict[str, str | None] = {}  # approval_id -> flight rule id (Tier 1)
+        self._needs_rescore: dict[str, str] = {}  # sat_id -> diagnostic plan_id executed since the last score
         self._schedule_requests: dict[str, ScheduleRequest] = {}
         self._schemas = {s["name"]: s["parameters"] for s in TOOL_SCHEMAS}
         self._handlers = {name: getattr(self, f"_tool_{name}") for name in AGENT_TOOLS}
@@ -75,7 +87,8 @@ class Dispatcher:
             return ToolOutcome({"error": "; ".join(e["msg"].removeprefix("Value error, ") for e in exc.errors())})
         except (ValueError, LookupError) as exc:  # SafetyError, ToolArgError, or a backend refusing the input
             return ToolOutcome({"error": str(exc) or type(exc).__name__})
-        return ToolOutcome(jsonable(outcome.result), outcome.plan_hash)
+        return ToolOutcome(jsonable(outcome.result), outcome.plan_hash,
+                           tuple((kind, jsonable(payload)) for kind, payload in outcome.events))
 
     def _check_args(self, name: str, args: Mapping[str, Any] | None) -> dict[str, Any]:
         if args is None:
@@ -148,6 +161,21 @@ class Dispatcher:
         )
         return plan
 
+    def execute(self, approval_id: str, recorder: Recorder | None = None) -> dict[str, Any]:
+        """Uplink and run a plan the Flight Director approved through `approve()`. Records an `execution` event
+        and returns its payload. Raises SafetyError if the approval was not granted, was already executed, or
+        the uplink window has closed."""
+        ticket = self.approvals.get(approval_id)
+        if ticket is None or approval_id not in self._decided:
+            raise SafetyError("not_approved", f"{approval_id} has not been approved")
+        if approval_id in self._executed:
+            raise SafetyError("already_executed", f"{approval_id} was already executed")
+        plan = self.plans[ticket.plan_id]
+        safety.check_plan(plan, self.backend.contacts(), now=self.backend.now())
+        payload = jsonable(self._run(approval_id))
+        (recorder if recorder is not None else NullRecorder()).record("execution", payload, plan_hash=ticket.plan_hash)
+        return payload
+
     # ------------------------------------------------------------------ tools
     def _tool_get_fleet_status(self) -> ToolOutcome:
         t = self.backend.now()
@@ -178,7 +206,9 @@ class Dispatcher:
         )
 
     def _tool_score_hypotheses(self, sat_id: Any) -> ToolOutcome:
-        scores = self.backend.score_hypotheses(_sat_id(sat_id))
+        sat_id = _sat_id(sat_id)
+        scores = self.backend.score_hypotheses(sat_id)
+        self._needs_rescore.pop(sat_id, None)
         return ToolOutcome(
             {
                 "scores": scores.scores,
@@ -211,7 +241,7 @@ class Dispatcher:
             plan_id=plan.plan_id,
             sat_id=plan.sat_id,
             priority=self._priority(plan.sat_id),
-            deadline_t=plan.uplink.los,
+            deadline_t=_uplink_deadline(plan),
             duration_s=UPLINK_DURATION_S,
         )
         # Re-solve with every pending request so station conflicts between satellites are resolved together.
@@ -233,7 +263,9 @@ class Dispatcher:
     def _tool_request_approval(self, plan_id: Any) -> ToolOutcome:
         plan = self._verified(plan_id)
         sim = self.sims[plan.plan_id]
-        tier, _flight_rule = self.backend.tier(plan, sim)
+        if plan.kind == "plan" and plan.sat_id in self._needs_rescore:
+            raise ToolArgError(_rescore_message(plan.sat_id, self._needs_rescore[plan.sat_id]))
+        tier, flight_rule = self.backend.tier(plan, sim)
         approval_id = f"AP-{len(self.approvals) + 1}"
         self.approvals[approval_id] = ApprovalRequestMsg(
             approval_id=approval_id,
@@ -243,24 +275,74 @@ class Dispatcher:
             tier=tier,
             sim_id=sim.sim_id,
         )
-        return ToolOutcome({"approval_id": approval_id, "tier": tier}, plan.plan_hash)
+        out: dict[str, Any] = {"approval_id": approval_id, "plan_id": plan.plan_id, "tier": tier}
+        if tier != 1:
+            out["status"] = "awaiting_approval"
+            return ToolOutcome(out, plan.plan_hash)
+        # Tier 1: a pre-approved flight rule covers this plan, so it executes now and the trace shows the rule.
+        self._flight_rules[approval_id] = flight_rule
+        payload = self._run(approval_id)
+        self._decided.add(approval_id)
+        out.update(status="auto_executed", flight_rule=flight_rule, t_done=payload["t_done"])
+        return ToolOutcome(out, plan.plan_hash, events=(("execution", payload),))
 
     # ------------------------------------------------------------------ helpers
     def _propose(self, sat_id: Any, commands: Any, kind: str) -> ToolOutcome:
         sat_id = _sat_id(sat_id)
         if not isinstance(commands, list) or not commands:
             raise ToolArgError("commands must be a non-empty list")
+        if kind == "plan" and sat_id in self._needs_rescore:
+            raise ToolArgError(_rescore_message(sat_id, self._needs_rescore[sat_id]))
         now = self.backend.now()
         uplink = self.backend.next_contact(sat_id, now)
         if uplink is None:
             raise ToolArgError(f"{sat_id} has no contact window left in the horizon")
-        cmds = [safety.parse_command(c, default_t_exec=uplink.aos) for c in commands]
+        start = max(uplink.aos, now)  # never time-tag a command in the past, even when the pass is in progress
+        if kind == "diagnostic":
+            cmds = self._diagnostic_steps(commands, start, uplink)
+        else:
+            cmds = [safety.parse_command(c, default_t_exec=start) for c in commands]
+        if any(c.t_exec < now for c in cmds):
+            raise SafetyError("bad_time", "t_exec is before the current time")
         plan_id = f"P-{len(self.plans) + 1}"
         plan = Plan(plan_id=plan_id, sat_id=sat_id, kind=kind, uplink=uplink, commands=cmds,
                     created_by=self.created_by)
         safety.check_plan(plan, self.backend.contacts(), now=now)
         self.plans[plan_id] = plan
         return ToolOutcome({"plan_id": plan_id}, plan.plan_hash)
+
+    def _diagnostic_steps(self, commands: list[Any], start: float, uplink: Any) -> list[Any]:
+        """Untagged steps run one DIAGNOSTIC_STEP_S apart, after one step of lead time for the uplink; the test,
+        including the dwell after its last step, must end before LOS so its telemetry comes down this pass."""
+        first = start + DIAGNOSTIC_STEP_S
+        cmds = [safety.parse_command(c, default_t_exec=first + k * DIAGNOSTIC_STEP_S) for k, c in enumerate(commands)]
+        end = max(c.t_exec for c in cmds) + DIAGNOSTIC_STEP_S
+        if end > uplink.los:
+            left = max(0.0, uplink.los - start)
+            raise ToolArgError(
+                f"the diagnostic needs {end - start:.0f} s but the {uplink.station_id} pass has {left:.0f} s left; "
+                "use fewer steps"
+            )
+        return cmds
+
+    def _run(self, approval_id: str) -> dict[str, Any]:
+        """Execute an approved (or Tier 1) plan through the backend and return the `execution` payload."""
+        ticket = self.approvals[approval_id]
+        plan = self.plans[ticket.plan_id]
+        t_done = float(self.backend.execute(plan))
+        self._executed.add(approval_id)
+        self._schedule_requests.pop(plan.plan_id, None)  # its uplink happened; stop re-solving for it
+        if plan.kind == "diagnostic":
+            self._needs_rescore[plan.sat_id] = plan.plan_id
+        return {
+            "approval_id": approval_id,
+            "plan_id": plan.plan_id,
+            "sat_id": plan.sat_id,
+            "kind": plan.kind,
+            "tier": ticket.tier,
+            "flight_rule": self._flight_rules.get(approval_id),
+            "t_done": t_done,
+        }
 
     def _plan(self, plan_id: Any) -> Plan:
         plan = self.plans.get(plan_id) if isinstance(plan_id, str) else None
@@ -290,6 +372,18 @@ class Dispatcher:
 
 
 # ---------------------------------------------------------------------- arg parsing
+def _uplink_deadline(plan: Plan) -> float:
+    """A diagnostic must be uplinked before its first step; a plan any time inside its contact."""
+    if plan.kind == "diagnostic":
+        return min(plan.uplink.los, min(c.t_exec for c in plan.commands))
+    return plan.uplink.los
+
+
+def _rescore_message(sat_id: str, plan_id: str) -> str:
+    return (f"diagnostic {plan_id} has run on {sat_id}; call score_hypotheses for {sat_id} first, "
+            "so the plan uses the new evidence")
+
+
 def _sat_id(value: Any) -> str:
     if value not in SAT_IDS:
         raise ToolArgError(f"unknown sat_id {value!r}; use SAT-01..SAT-24")
