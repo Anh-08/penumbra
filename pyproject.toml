@@ -8,4 +8,4 @@ requires-python = ">=3.11"
 # importlib mode: several packages can each have a tests/ folder with same-named files.
 addopts = "--import-mode=importlib"
 pythonpath = ["."]
-testpaths = ["contracts", "backend", "tests"]
+testpaths = ["contracts", "backend", "bench", "tests"]
