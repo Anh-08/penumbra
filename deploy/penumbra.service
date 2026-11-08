@@ -7,8 +7,11 @@ Requires=docker.service
 Restart=always
 RestartSec=5
 ExecStartPre=-/usr/bin/docker rm -f penumbra
-# Port 80 on the host -> 8000 in the container. No secrets are passed: replay mode only.
-ExecStart=/usr/bin/docker run --name penumbra --rm -p 80:8000 --memory=3g penumbra
+# Port 80 on the host -> 8000 in the container. Replay mode by default. Live mode (T42: judge-triggered
+# incidents need a model) is opt-in: root creates /etc/penumbra/live.env (mode 600) with GEMINI_API_KEY,
+# GEMINI_MODEL and PENUMBRA_OFFLINE=0; `-e NAME` without a value passes each only when it is set here.
+EnvironmentFile=-/etc/penumbra/live.env
+ExecStart=/usr/bin/docker run --name penumbra --rm -p 80:8000 --memory=3g -e GEMINI_API_KEY -e GEMINI_MODEL -e PENUMBRA_OFFLINE penumbra
 ExecStop=/usr/bin/docker stop penumbra
 
 [Install]

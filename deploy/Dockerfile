@@ -1,5 +1,5 @@
 # Penumbra public replay demo (T32): one container serves the API, the WebSocket and the built frontend.
-# Replay mode only: no Gemini or ElevenLabs keys are ever passed in. Build from the repo root:
+# Replay mode by default (PENUMBRA_OFFLINE=1, no keys baked in); the systemd unit may pass a model key at run time. Build from the repo root:
 #   docker build -f deploy/Dockerfile -t penumbra .
 
 # ---- frontend build
