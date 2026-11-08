@@ -29,6 +29,7 @@ from contracts import (
 from .clock import SimClock
 from .messages import validate_message
 from .providers import MockProvider, select_provider
+from .storm import STORM_SEED, StormDirector
 
 FLEET_INTERVAL_S = 2 / 3  # 1.5 Hz, inside the contracted 1–2 Hz range.
 
@@ -94,6 +95,9 @@ def create_app(provider: Any | None = None) -> FastAPI:
             listener.put_nowait(message)
 
     async def after_matrix(message: dict[str, Any]) -> None:
+        storm = app.state.storm
+        if storm is not None and storm.status.running:
+            return  # the storm director tickets the satellite on screen itself
         results = message["data"]["results"]
         ticket_for = getattr(source, "operator_ticket", None)
         trajectory_for = getattr(source, "trajectory", None)
@@ -133,6 +137,8 @@ def create_app(provider: Any | None = None) -> FastAPI:
                 loop.call_soon_threadsafe(lambda: loop.create_task(after_matrix(message)))
 
     app.state.publish = publish
+    app.state.storm = (StormDirector(source, publish, transition)
+                       if getattr(source, "supports_storm", False) else None)
 
     @app.websocket("/ws")
     async def websocket_fleet(websocket: WebSocket) -> None:
@@ -186,6 +192,16 @@ def create_app(provider: Any | None = None) -> FastAPI:
         if not scenario_ready():
             raise HTTPException(status_code=503, detail="scenario is not ready")
         app.state.run_live = request.live if request else False
+        storm = app.state.storm
+        if storm is not None:
+            if storm.busy:
+                raise HTTPException(status_code=409, detail="a fault storm is already running")
+            app.state.scenario_task = asyncio.create_task(
+                asyncio.to_thread(source.start_storm, 'fault-storm', STORM_SEED))
+            await app.state.scenario_task
+            clock.reset(source.t0)
+            storm.start(app.state.run_live)
+            return StormResponse(started=True, alert_count=0)
         if getattr(source, 'background_scenario', False):
             app.state.scenario_task = asyncio.create_task(
                 asyncio.to_thread(source.set_scenario, 'fault-storm', 1))
@@ -227,6 +243,8 @@ def create_app(provider: Any | None = None) -> FastAPI:
             ))
         else:
             publish("execution", result)
+            if app.state.storm is not None:
+                app.state.storm.approved(result.sat_id)
         return result
 
     @app.post("/api/clock", response_model=ClockResponse)
