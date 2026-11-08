@@ -6,7 +6,8 @@ Every result is plain JSON (no NaN, no pydantic objects), ready for the model an
 `approve()` is the check behind POST /api/approve; `execute()` runs an approved plan afterwards.
 `operator_ticket()` gives the Flight Director's button an approval_id for any simulated plan, including a red one,
 so pressing it shows the refusal with the failing hypotheses (physics has veto). The agent's own
-`request_approval` tool still refuses failed plans.
+`request_approval` tool still refuses failed plans. Tickets for several plans of one satellite can coexist; once
+one recovery plan is approved (or auto-executed), approving another one for that satellite is refused (superseded).
 
 Diagnostic tests (T20): `propose_diagnostic_test` time-tags untagged steps one DIAGNOSTIC_STEP_S apart inside
 the pass. A Tier 1 plan (pre-approved flight rule) executes as soon as `request_approval` is called. After a
@@ -152,6 +153,12 @@ class Dispatcher:
             if not sim.passes_all:
                 failing = safety.failing_hypotheses(sim)
                 raise SafetyError("failed_verification", f"{plan.plan_id} failed verification ({sim.sim_id})")
+            if plan.kind == "plan":  # one recovery plan per satellite: the first approved one wins (after the
+                # verification checks, so a red plan always shows why it failed)
+                done = next((t.plan_id for a, t in self.approvals.items() if a in self._decided
+                             and t.sat_id == plan.sat_id and self.plans[t.plan_id].kind == "plan"), None)
+                if done is not None:
+                    raise SafetyError("superseded", f"{done} was already approved for {plan.sat_id}")
             current = safety.plan_hash(plan)
             if not (plan_hash == current == sim.plan_hash == ticket.plan_hash):
                 raise SafetyError("stale_hash", f"hash does not match the latest verified version of {plan.plan_id}")
