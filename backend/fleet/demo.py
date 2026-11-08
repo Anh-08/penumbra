@@ -151,6 +151,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.scenario == "fault-storm":
         res = run_storm(select_model(live=args.live), run_id=args.run_id, runs_dir=args.runs_dir, seed=args.seed)
         res.pop("backend")
+        res.pop("dispatchers")
         print(json.dumps(res, indent=1, default=str))
         return
     res = run(select_model(live=args.live), run_id=args.run_id, runs_dir=args.runs_dir, seed=args.seed)
@@ -177,19 +178,50 @@ class _Focus:
         return [e for e in self._b.triage() if e.sat_id == self._sat]
 
 
+class _Tee:
+    """Recorder that also hands every event to a callback (for streaming to the UI)."""
+
+    def __init__(self, inner, on_event) -> None:
+        self._inner, self._on_event = inner, on_event
+
+    def record(self, kind, payload, **kw):
+        event = self._inner.record(kind, payload, **kw)
+        self._on_event(event)
+        return event
+
+
 def run_storm(model=None, *, run_id: str | None = None, runs_dir: str | Path = "runs/demo", seed: int = 0,
-              sat_ids: tuple[str, ...] = SAT_IDS, step_s: float = 60.0) -> dict:
+              sat_ids: tuple[str, ...] = SAT_IDS, step_s: float = 60.0, on_event=None,
+              on_backend=None, backend: FleetBackend | None = None, approve: bool = True,
+              on_dispatcher=None, on_approval=None) -> dict:
     """fault-storm: each storm satellite is worked when its alert comes, in alert order (the clock stops
-    while the agent works). Returns {sat_id: outcome} plus the run id and path."""
-    sc = scenarios.build("fault-storm", seed=seed, sat_ids=sat_ids)
-    backend = FleetBackend(sc)
+    while the agent works). Returns {sat_id: outcome} plus the run id and path.
+
+    Blocking and CPU-bound (about 60 s on 24 satellites in replay at pace 0): run it in a worker thread.
+    on_event(RecorderEvent) gets every flight-recorder event as it is written (alerts, model and tool events,
+    approval, execution). on_backend(FleetBackend) is called once, before the clock starts, so the caller
+    can read fleet_state, matrix and trajectory from the same backend while the run goes on; or pass
+    backend= (a FleetBackend on scenarios.build("fault-storm")) built by the caller.
+    Tier 2: by default the scripted Flight Director approves. on_approval(sat_id, dispatcher, ticket) instead
+    hands the ticket to the caller and BLOCKS until it returns (the sim clock does not move meanwhile), so
+    a person can click Approve, which calls dispatcher.approve(...) and dispatcher.execute(...).
+    approve=False with no on_approval leaves the ticket open and moves on (its pass may close).
+    on_dispatcher(sat_id, Dispatcher) gets each satellite's dispatcher once its agent run is done
+    (also returned in "dispatchers")."""
+    if backend is None:
+        backend = FleetBackend(scenarios.build("fault-storm", seed=seed, sat_ids=sat_ids))
+    sc = backend.scenario
+    if on_backend is not None:
+        on_backend(backend)
     model = model or select_model(live=False)
     run_id = run_id or new_run_id(model_kind(model))
     path = Path(runs_dir) / f"{run_id}.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     outcomes: dict[str, dict] = {}
+    dispatchers: dict[str, Dispatcher] = {}
     end = float(sc.env.t[-1])
-    with FlightRecorder(run_id, path=path) as flight:
+    with FlightRecorder(run_id, path=path) as recorder:
+        flight = _Tee(recorder, on_event) if on_event is not None else recorder
         t = backend.now()
         while len(outcomes) < len(STORM_SATS) and t < end:
             t = min(t + step_s, end)
@@ -203,7 +235,10 @@ def run_storm(model=None, *, run_id: str | None = None, runs_dir: str | Path = "
                 if alerted[sat].severity not in ("warning", "critical"):
                     continue
                 dispatcher = Dispatcher(_Focus(backend, sat))
+                dispatchers[sat] = dispatcher
                 agent = run_agent(model, dispatcher, flight)
+                if on_dispatcher is not None:
+                    on_dispatcher(sat, dispatcher)
                 out = {"t": backend.now(), "status": agent.status, "steps": agent.steps,
                        "rendered_text": agent.rendered_text, "tier": None, "flight_rule": None, "executed": False}
                 tickets = list(dispatcher.approvals.values())
@@ -212,6 +247,12 @@ def run_storm(model=None, *, run_id: str | None = None, runs_dir: str | Path = "
                     out.update(tier=ticket.tier, plan_id=ticket.plan_id, plan_hash=ticket.plan_hash)
                     if ticket.tier == 1:
                         out.update(executed=True, flight_rule=dispatcher._flight_rules.get(ticket.approval_id))
+                    elif on_approval is not None:
+                        on_approval(sat, dispatcher, ticket)            # blocks until the Flight Director acts
+                        out.update(approval_id=ticket.approval_id,
+                                   executed=ticket.approval_id in dispatcher._executed)
+                    elif not approve:
+                        out.update(approval_id=ticket.approval_id, awaiting_approval=True)
                     else:
                         res = dispatcher.approve(ticket.approval_id, ticket.plan_hash, flight)
                         if not isinstance(res, ApprovalRefused):
@@ -223,7 +264,8 @@ def run_storm(model=None, *, run_id: str | None = None, runs_dir: str | Path = "
                 out["rank_status"] = rank.status
                 out["triage_status"] = next((e.status for e in backend.triage() if e.sat_id == sat), None)
                 outcomes[sat] = out
-    return {"run_id": run_id, "path": str(path), "outcomes": outcomes, "data": DATA_NOTE, "backend": backend}
+    return {"run_id": run_id, "path": str(path), "outcomes": outcomes, "data": DATA_NOTE, "backend": backend,
+            "dispatchers": dispatchers}
 
 
 if __name__ == "__main__":

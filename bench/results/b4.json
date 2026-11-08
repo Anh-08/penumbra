@@ -1,0 +1,174 @@
+{
+ "benchmark": "B4 scale (T24)",
+ "generated_utc": "2026-11-08T00:53:02+00:00",
+ "machine": {
+  "python": "3.11.16",
+  "numpy": "2.4.6",
+  "cpus": 22,
+  "platform": "Linux-7.0.0-43-generic-x86_64-with-glibc2.43"
+ },
+ "n": {
+  "planning_cases": 4,
+  "scheduler_cases": 2,
+  "runs_per_case": 1
+ },
+ "seeds": {
+  "monte_carlo_and_requests": 24
+ },
+ "settings": {
+  "scale": {
+   "dtype": "float32",
+   "step_s": 60,
+   "hours": 3.0,
+   "monte_carlo": 20
+  },
+  "operational": {
+   "dtype": "float64",
+   "step_s": 10,
+   "hours": 24.0,
+   "monte_carlo": 100
+  },
+  "plans": [
+   "no-op",
+   "SET_PAYLOAD_DUTY 0.2",
+   "SAFE_MODE"
+  ],
+  "hypotheses": [
+   "H0",
+   "H1",
+   "H2",
+   "H3",
+   "H4",
+   "H5"
+  ]
+ },
+ "planning_scale": [
+  {
+   "satellites": 24,
+   "hypotheses": 6,
+   "plans": 3,
+   "monte_carlo": 20,
+   "batch_elements": 8640,
+   "steps": 180,
+   "step_s": 60,
+   "hours": 3.0,
+   "dtype": "float32",
+   "evals": 1555200,
+   "evals_per_s": 37655835.2,
+   "setup_s": 0.007,
+   "wall_s": 0.049,
+   "peak_ram_mib": 63.4,
+   "check_min_soc_range": [
+    0.06,
+    0.825
+   ]
+  },
+  {
+   "satellites": 1000,
+   "hypotheses": 6,
+   "plans": 3,
+   "monte_carlo": 20,
+   "batch_elements": 360000,
+   "steps": 180,
+   "step_s": 60,
+   "hours": 3.0,
+   "dtype": "float32",
+   "evals": 64800000,
+   "evals_per_s": 35405770.9,
+   "setup_s": 0.037,
+   "wall_s": 1.885,
+   "peak_ram_mib": 211.0,
+   "check_min_soc_range": [
+    0.0,
+    0.83
+   ]
+  },
+  {
+   "satellites": 10000,
+   "hypotheses": 6,
+   "plans": 3,
+   "monte_carlo": 20,
+   "batch_elements": 3600000,
+   "steps": 180,
+   "step_s": 60,
+   "hours": 3.0,
+   "dtype": "float32",
+   "evals": 648000000,
+   "evals_per_s": 22878096.5,
+   "setup_s": 0.364,
+   "wall_s": 29.174,
+   "peak_ram_mib": 1586.9,
+   "check_min_soc_range": [
+    0.0,
+    0.843
+   ]
+  }
+ ],
+ "planning_operational_24": {
+  "satellites": 24,
+  "hypotheses": 6,
+  "plans": 3,
+  "monte_carlo": 100,
+  "batch_elements": 43200,
+  "steps": 8640,
+  "step_s": 10,
+  "hours": 24.0,
+  "dtype": "float64",
+  "evals": 373248000,
+  "evals_per_s": 29685928.8,
+  "setup_s": 0.009,
+  "wall_s": 12.597,
+  "peak_ram_mib": 125.2,
+  "check_min_soc_range": [
+   0.0,
+   0.828
+  ]
+ },
+ "scheduler": [
+  {
+   "requests": 24,
+   "satellites": 24,
+   "stations": 3,
+   "contacts": 597,
+   "solver": "cpsat",
+   "optimal": true,
+   "solve_ms": 25.0,
+   "wall_ms": 25.3,
+   "scheduled": 24,
+   "unscheduled": 0,
+   "time_limit_s": 7.0,
+   "peak_ram_mib": 119.5
+  },
+  {
+   "requests": 200,
+   "satellites": 24,
+   "stations": 3,
+   "contacts": 597,
+   "solver": "cpsat",
+   "optimal": true,
+   "solve_ms": 275.4,
+   "wall_ms": 276.7,
+   "scheduled": 200,
+   "unscheduled": 0,
+   "time_limit_s": 7.0,
+   "peak_ram_mib": 152.2
+  }
+ ],
+ "notes": [
+  "Planning: batch shape (satellites, 6 hypotheses, 3 plans, Monte Carlo); running min/max only, no time history. evals = batch elements x time steps. Each case is a fresh subprocess; peak_ram_mib is its ru_maxrss and includes the Python, numpy and orbit-data baseline.",
+  "The 1,000 and 10,000 satellite fleets repeat the 24 real illumination rows; they are a load test, not real satellites.",
+  "Scheduler: the contract caps the fleet at SAT-01..SAT-24, so 200 means 200 uplink requests over the 24 satellites and 3 stations (B1 decision 2026-11-08T00:25Z, confirmed by B). solve_ms is reported by the scheduler; CP-SAT time limit 7 s."
+ ],
+ "data": {
+  "real": [
+   "24 satellite orbits (cached public OMM elements, renamed SAT-01..SAT-24)",
+   "Sun/Earth geometry (JPL DE421) and the illumination derived from it",
+   "ground station sites and 10 deg contact windows"
+  ],
+  "simulated": [
+   "EPS state and Monte Carlo perturbations (seeded)",
+   "uplink requests (seeded priorities and deadlines)",
+   "satellites 25..10,000 (copies of the 24 real illumination rows)"
+  ]
+ }
+}
