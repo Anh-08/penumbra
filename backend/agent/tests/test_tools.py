@@ -14,12 +14,13 @@ CONTRACT_TOOLS = {
     "simulate": ["plan_id", "hypotheses", "monte_carlo"],
     "schedule_uplink": ["plan_id"],
     "request_approval": ["plan_id"],
+    "get_conjunctions": ["sat_id"],  # T31, contracts.AGENT_TOOLS_CAM
 }
 
 
-def test_exactly_the_eight_contract_tools_in_order():
+def test_exactly_the_contract_tools_in_order():
     names = [s["name"] for s in TOOL_SCHEMAS]
-    assert names == list(c.AGENT_TOOLS) == list(CONTRACT_TOOLS)
+    assert names == list(c.AGENT_TOOLS) + list(c.AGENT_TOOLS_CAM) == list(CONTRACT_TOOLS)
 
 
 def test_parameter_names_match_contract():
@@ -41,15 +42,17 @@ def test_required_parameters():
     assert req["simulate"] == ["plan_id"]
     assert req["schedule_uplink"] == ["plan_id"]
     assert req["request_approval"] == ["plan_id"]
+    assert req["get_conjunctions"] == ["sat_id"]
 
 
 def test_enums_come_from_contracts():
     sat = tool_schema("score_hypotheses")["parameters"]["properties"]["sat_id"]
     assert sat["enum"] == list(c.SAT_IDS)
     cmd = tool_schema("propose_plan")["parameters"]["properties"]["commands"]["items"]
-    assert cmd["properties"]["name"]["enum"] == list(c.COMMAND_NAMES)
+    assert cmd["properties"]["name"]["enum"] == list(c.ALL_COMMAND_NAMES)
     args = cmd["properties"]["args"]["properties"]
-    assert set(args) == {a for names in c.COMMAND_ARGS.values() for a in names}
+    assert set(args) == {a for names in c.ALL_COMMAND_ARGS.values() for a in names}
+    assert args["window_id"]["enum"] == list(c.CAM_WINDOW_IDS)
     assert args["load"]["enum"] == list(c.LOADS)
     assert (args["duty"]["minimum"], args["duty"]["maximum"]) == c.PAYLOAD_DUTY_RANGE
     assert (args["setpoint_c"]["minimum"], args["setpoint_c"]["maximum"]) == c.HEATER_SETPOINT_RANGE_C

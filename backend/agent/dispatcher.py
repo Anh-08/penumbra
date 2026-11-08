@@ -17,6 +17,10 @@ again, so every plan is built on the diagnostic's evidence.
 Infeasible (T26): after MAX_FAILED_PLANS failed plans for a satellite, only a SAFE_MODE plan may still be
 proposed, and simulate results say so; if the backend offers rank(sat_id), they also carry its status.
 
+Collision avoidance (T31): `get_conjunctions` lists the backend's conjunctions; a `propose_plan` with a `CAM_BURN`
+becomes a kind "maneuver" plan (an untimed burn defaults to the start of its window), checked by
+safety.check_maneuver at every step. A CAM is never Tier 1, and a conjunction gets at most one approved burn.
+
 Station conflicts (T26): `schedule_uplink` re-solves every pending request together. If the plan gets no slot,
 its contact is marked blocked for that satellite and the next proposal targets the following contact. Plans
 that lost the slot they had are reported as `bumped` (and in `self.bumped`). `request_approval` needs a slot.
@@ -31,12 +35,14 @@ from pydantic import BaseModel, ValidationError
 
 from contracts import (
     AGENT_TOOLS,
+    AGENT_TOOLS_CAM,
     HYPOTHESES,
     HYPOTHESIS_LABELS,
     SAT_IDS,
     Alert,
     ApprovalRefused,
     ApprovalRequestMsg,
+    Conjunction,
     Assignment,
     Plan,
     ScheduleRequest,
@@ -90,13 +96,14 @@ class Dispatcher:
         self._fixed: dict[str, Assignment] = {}  # booked slots of executed plans: never moved, never given away
         self._schedule_requests: dict[str, ScheduleRequest] = {}
         self._schemas = {s["name"]: s["parameters"] for s in TOOL_SCHEMAS}
-        self._handlers = {name: getattr(self, f"_tool_{name}") for name in AGENT_TOOLS}
+        self.conjunctions: dict[str, Conjunction] = {}  # CJ-n seen through get_conjunctions (narration)
+        self._handlers = {name: getattr(self, f"_tool_{name}") for name in AGENT_TOOLS + AGENT_TOOLS_CAM}
 
     # ------------------------------------------------------------------ entry point
     def dispatch(self, name: str, args: Mapping[str, Any] | None) -> ToolOutcome:
         handler = self._handlers.get(name)
         if handler is None:
-            return ToolOutcome({"error": f"unknown tool {name!r}; tools are {', '.join(AGENT_TOOLS)}"})
+            return ToolOutcome({"error": f"unknown tool {name!r}; tools are {', '.join(self._handlers)}"})
         try:
             outcome = handler(**self._check_args(name, args))
         except ValidationError as exc:
@@ -123,7 +130,7 @@ class Dispatcher:
     def lookup(self, obj_id: str) -> BaseModel | None:
         """Narration registry: plan, SimResult, approval or alert by id."""
         for prefix, table in (("AP-", self.approvals), ("AL-", self.alerts), ("P-", self.plans),
-                              ("S-", self.sim_results)):
+                              ("S-", self.sim_results), ("CJ-", self.conjunctions)):
             if obj_id.startswith(prefix):
                 return table.get(obj_id)
         return None
@@ -159,10 +166,12 @@ class Dispatcher:
                              and t.sat_id == plan.sat_id and self.plans[t.plan_id].kind == "plan"), None)
                 if done is not None:
                     raise SafetyError("superseded", f"{done} was already approved for {plan.sat_id}")
+            if plan.kind == "maneuver":
+                self._check_one_burn(plan)
             current = safety.plan_hash(plan)
             if not (plan_hash == current == sim.plan_hash == ticket.plan_hash):
                 raise SafetyError("stale_hash", f"hash does not match the latest verified version of {plan.plan_id}")
-            safety.check_plan(plan, self.backend.contacts(), now=self.backend.now())
+            safety.check_plan(plan, self.backend.contacts(), now=self.backend.now(), conjunctions=self._conjunctions())
             slot = self.assignments.get(plan.plan_id)
             if slot is None and plan.plan_id in self._schedule_requests:
                 raise SafetyError("uplink_closed", f"{plan.plan_id} has no uplink slot (it lost it to another plan)")
@@ -220,7 +229,7 @@ class Dispatcher:
         if approval_id in self._executed:
             raise SafetyError("already_executed", f"{approval_id} was already executed")
         plan = self.plans[ticket.plan_id]
-        safety.check_plan(plan, self.backend.contacts(), now=self.backend.now())
+        safety.check_plan(plan, self.backend.contacts(), now=self.backend.now(), conjunctions=self._conjunctions())
         payload = jsonable(self._run(approval_id))
         (recorder if recorder is not None else NullRecorder()).record("execution", payload, plan_hash=ticket.plan_hash)
         return payload
@@ -350,6 +359,8 @@ class Dispatcher:
         if plan.plan_id not in self.assignments:
             raise ToolArgError(f"{plan.plan_id} has no uplink slot; call schedule_uplink first")
         tier, flight_rule = self.backend.tier(plan, sim)
+        if plan.kind == "maneuver" or any(c.name == "CAM_BURN" for c in plan.commands):
+            tier, flight_rule = 2, None  # a collision-avoidance burn is never Tier 1, whatever the backend says
         approval_id = f"AP-{len(self.approvals) + 1}"
         self.approvals[approval_id] = ApprovalRequestMsg(
             approval_id=approval_id,
@@ -385,18 +396,65 @@ class Dispatcher:
         if uplink is None:
             raise ToolArgError(f"{sat_id} has no contact window left in the horizon")
         start = max(uplink.aos, now)  # never time-tag a command in the past, even when the pass is in progress
+        burns = [c for c in commands if isinstance(c, Mapping) and c.get("name") == "CAM_BURN"]
+        if burns and kind != "plan":
+            raise SafetyError("bad_args", "CAM_BURN goes in propose_plan (a maneuver plan), never in a diagnostic")
+        if len(burns) > 1:
+            raise SafetyError("cam_duplicate", "a maneuver plan has exactly one CAM_BURN (one burn per conjunction)")
+        conjunctions = self._conjunctions() if burns else None
         if kind == "diagnostic":
             cmds = self._diagnostic_steps(commands, start, uplink)
         else:
-            cmds = [safety.parse_command(c, default_t_exec=start) for c in commands]
+            cmds = [safety.parse_command(c, default_t_exec=self._burn_start(sat_id, c, start, conjunctions, now))
+                    for c in commands]
         if any(c.t_exec < now for c in cmds):
             raise SafetyError("bad_time", "t_exec is before the current time")
         plan_id = f"P-{len(self.plans) + 1}"
-        plan = Plan(plan_id=plan_id, sat_id=sat_id, kind=kind, uplink=uplink, commands=cmds,
+        plan = Plan(plan_id=plan_id, sat_id=sat_id, kind="maneuver" if burns else kind, uplink=uplink, commands=cmds,
                     created_by=self.created_by)
-        safety.check_plan(plan, self.backend.contacts(), now=now)
+        safety.check_plan(plan, self.backend.contacts(), now=now, conjunctions=conjunctions)
+        if plan.kind == "maneuver":
+            self._check_one_burn(plan)
         self.plans[plan_id] = plan
         return ToolOutcome({"plan_id": plan_id}, plan.plan_hash)
+
+    def _conjunctions(self) -> list[Conjunction] | None:
+        """The backend's conjunctions (orbit, T31), or None if this backend has none."""
+        source = getattr(self.backend, "conjunctions", None)
+        return list(source()) if callable(source) else None
+
+    def _burn_start(self, sat_id: str, raw: Any, start: float, conjunctions: list[Conjunction] | None,
+                    now: float) -> float:
+        """Default t_exec: a CAM_BURN without t_exec executes at the start of its window (never before the
+        uplink or now); any other command at the uplink."""
+        if not (isinstance(raw, Mapping) and raw.get("name") == "CAM_BURN"):
+            return start
+        window_id = (raw.get("args") or {}).get("window_id") if isinstance(raw.get("args"), Mapping) else None
+        if window_id not in ("W1", "W2", "W3"):
+            return start  # parse_command rejects it with a clear message
+        cj = safety.resolve_conjunction(sat_id, window_id, conjunctions, now)
+        return max(cj.window(window_id).t_start, start)
+
+    def _check_one_burn(self, plan: Plan) -> None:
+        """One approved burn per conjunction: a maneuver for a conjunction that already has an approved (or
+        executed) burn is refused."""
+        cj = safety.check_maneuver(plan, self._conjunctions(), now=None)
+        for approval_id in self._decided:
+            other = self.plans.get(self.approvals[approval_id].plan_id)
+            if other is None or other.plan_id == plan.plan_id or other.kind != "maneuver":
+                continue
+            if safety.check_maneuver(other, self._conjunctions(), now=None).conj_id == cj.conj_id:
+                raise SafetyError("cam_duplicate", f"{cj.conj_id} already has an approved burn ({other.plan_id})")
+
+    def _tool_get_conjunctions(self, sat_id: Any) -> ToolOutcome:
+        sat_id = _sat_id(sat_id)
+        source = self._conjunctions()
+        if source is None:
+            return ToolOutcome({"sat_id": sat_id, "conjunctions": [], "note": "no conjunction data on this backend"})
+        now = self.backend.now()
+        found = sorted((cj for cj in source if cj.sat_id == sat_id and cj.tca > now), key=lambda cj: cj.tca)
+        self.conjunctions.update((cj.conj_id, cj) for cj in found)
+        return ToolOutcome({"sat_id": sat_id, "conjunctions": [cj.model_dump() for cj in found]})
 
     def _failed_plans(self, sat_id: str) -> int:
         """Recovery plans (not SAFE_MODE, not diagnostics) for this satellite whose latest simulation failed."""
@@ -462,7 +520,7 @@ class Dispatcher:
     def _verified(self, plan_id: Any) -> Plan:
         """A registered plan that is still safe and whose latest simulation passed, for this exact hash."""
         plan = self._plan(plan_id)
-        safety.check_plan(plan, self.backend.contacts(), now=self.backend.now())
+        safety.check_plan(plan, self.backend.contacts(), now=self.backend.now(), conjunctions=self._conjunctions())
         sim = self.sims.get(plan.plan_id)
         if sim is None:
             raise SafetyError("not_verified", f"{plan.plan_id} has not been simulated; call simulate first")
@@ -490,9 +548,12 @@ def _overlap(a: Assignment, b: Assignment) -> bool:
 
 
 def _uplink_deadline(plan: Plan) -> float:
-    """A diagnostic must be uplinked before its first step; a plan any time inside its contact."""
+    """A diagnostic must be uplinked before its first step, a maneuver before its burn; a plan any time inside its
+    contact (commands at AOS run as soon as they are uplinked)."""
     if plan.kind == "diagnostic":
         return min(plan.uplink.los, min(c.t_exec for c in plan.commands))
+    if plan.kind == "maneuver":
+        return min(plan.uplink.los, next(c.t_exec for c in plan.commands if c.name == "CAM_BURN"))
     return plan.uplink.los
 
 
