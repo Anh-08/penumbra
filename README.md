@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Gemini-agent_%2B_voice-8E75B2?logo=googlegemini&logoColor=white" alt="Gemini: agent and voice commands">
+  <img src="https://img.shields.io/badge/Gemini-agent_and_voice-8E75B2?logo=googlegemini&logoColor=white" alt="Gemini: agent and voice commands">
   <img src="https://img.shields.io/badge/ElevenLabs-voice_callouts-000000?logo=elevenlabs&logoColor=white" alt="ElevenLabs: voice callouts">
   <img src="https://img.shields.io/badge/Vultr-public_demo-007BFC?logo=vultr&logoColor=white" alt="Vultr: public demo">
   <img src="https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white" alt="Python 3.11">
