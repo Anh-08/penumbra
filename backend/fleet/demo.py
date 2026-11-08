@@ -146,8 +146,13 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--run-id")
     ap.add_argument("--runs-dir", default="runs/demo")
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--scenario", default="single-stuck-load", choices=["single-stuck-load", "fault-storm"])
+    ap.add_argument("--scenario", default="single-stuck-load",
+                    choices=["single-stuck-load", "fault-storm", "conjunction"])
     args = ap.parse_args(argv)
+    if args.scenario == "conjunction":
+        res = run_conjunction(select_model(live=args.live), run_id=args.run_id, runs_dir=args.runs_dir, seed=args.seed)
+        print(json.dumps(res.summary(), indent=1, default=str))
+        return
     if args.scenario == "fault-storm":
         res = run_storm(select_model(live=args.live), run_id=args.run_id, runs_dir=args.runs_dir, seed=args.seed)
         res.pop("backend")
@@ -266,6 +271,102 @@ def run_storm(model=None, *, run_id: str | None = None, runs_dir: str | Path = "
                 outcomes[sat] = out
     return {"run_id": run_id, "path": str(path), "outcomes": outcomes, "data": DATA_NOTE, "backend": backend,
             "dispatchers": dispatchers}
+
+
+# ----------------------------------------------------------------------------- conjunction (T31)
+CONJ_DATA_NOTE = {
+    "real": DATA_NOTE["real"],
+    "simulated": ["the debris object DEB-01 and its pass (data/debris/debris.json)", "all EPS telemetry",
+                  "burn power and slew time (assumed)", "sensor noise"],
+}
+
+
+@dataclass
+class ConjunctionResult:
+    run_id: str
+    path: Path
+    status: str
+    steps: int
+    alert: dict
+    approval_id: str | None
+    plan_id: str | None
+    plan_hash: str | None
+    window_id: str | None
+    burn_t: float | None
+    tca: float
+    refused: dict | None
+    execution: dict | None
+    alert_cleared: bool
+    min_downlinked_soc_after: float | None
+    rendered_text: str | None
+    backend: FleetBackend
+
+    def summary(self) -> dict:
+        d = {k: v for k, v in self.__dict__.items() if k != "backend"}
+        d["path"] = str(self.path)
+        d["data"] = CONJ_DATA_NOTE
+        d["soc_min_limit"] = K.SOC_MIN
+        return d
+
+
+def run_conjunction(model=None, *, run_id: str | None = None, runs_dir: str | Path = "runs/demo", seed: int = 0,
+                    sat_ids: tuple[str, ...] = SAT_IDS, approve: bool = True) -> ConjunctionResult:
+    """conjunction: the alert comes at T0 (TCA about 5 h ahead), the agent picks a burn window, the verifier checks
+    the power cost, the scripted Flight Director approves the hash it was shown, and the clock runs through TCA
+    plus one orbit. Same record format as run()."""
+    sc = scenarios.build("conjunction", seed=seed, sat_ids=sat_ids)
+    backend = FleetBackend(sc)
+    sat = sc.focus_sat
+    conj = backend.conjunctions(sat)[0]
+    _, msgs = until_alert(backend, sat)
+    model = model or select_model(live=False)
+    run_id = run_id or new_run_id(model_kind(model))
+    path = Path(runs_dir) / f"{run_id}.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    dispatcher = Dispatcher(_Focus(backend, sat))
+    alert = next(m["data"] for m in msgs if m["type"] == "alert" and m["data"].sat_id == sat)
+
+    approval_id = plan_id = plan_hash = None
+    refused = execution = None
+    with FlightRecorder(run_id, path=path) as flight:
+        for m in msgs:
+            if m["type"] == "alert":
+                flight.record("alert", m["data"].model_dump(mode="json"))
+        agent = run_agent(model, dispatcher, flight)
+        tickets = list(dispatcher.approvals.values())
+        if approve and tickets:
+            ticket = tickets[-1]
+            approval_id, plan_id, plan_hash = ticket.approval_id, ticket.plan_id, ticket.plan_hash
+            if ticket.tier == 1:
+                execution = {"status": "auto_executed"}
+            else:
+                outcome = dispatcher.approve(approval_id, plan_hash, flight)
+                if isinstance(outcome, ApprovalRefused):
+                    refused = outcome.model_dump(mode="json")
+                else:
+                    execution = dispatcher.execute(approval_id, flight)
+
+    burns = [c for c in backend.world.executed(sat) if c.name == "CAM_BURN"]
+    window_id = burns[0].args["window_id"] if burns else None
+    burn_t = float(burns[0].t_exec) if burns else None
+    end = min(float(conj.tca) + K.ORBIT_S, float(sc.env.t[-1]))
+    t0 = backend.now()
+    for t in np.arange(t0 + 60.0, end + 60.0, 60.0):
+        backend.advance_to(float(min(t, end)))
+    cleared = not any(a.sat_id == sat and a.reason_key == "conjunction" for a in backend.detector.detect(backend.now()))
+    min_soc = None
+    if burn_t is not None:
+        tm = backend.world.telemetry(sat, burn_t, end)
+        soc = tm["soc"][np.isfinite(tm["soc"])]
+        min_soc = float(soc.min()) if soc.size else None
+
+    return ConjunctionResult(
+        run_id=run_id, path=path, status=agent.status, steps=agent.steps, alert=alert.model_dump(mode="json"),
+        approval_id=approval_id, plan_id=plan_id, plan_hash=plan_hash, window_id=window_id, burn_t=burn_t,
+        tca=float(conj.tca), refused=refused,
+        execution=json.loads(json.dumps(execution, default=str)) if execution is not None else None,
+        alert_cleared=cleared, min_downlinked_soc_after=min_soc, rendered_text=agent.rendered_text, backend=backend,
+    )
 
 
 if __name__ == "__main__":
