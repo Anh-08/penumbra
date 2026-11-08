@@ -1,6 +1,7 @@
 import { formatCountdown, formatDuration } from './panelState.js';
 import { hashPrefix } from './flightState.js';
 import { IncidentPicker } from './IncidentPicker.jsx';
+import { STEPPER_LABEL, approvalTierLine, stepperItems } from './operatorCopy.js';
 
 const HYPOTHESES = ['H0', 'H1', 'H2', 'H3', 'H4', 'H5'];
 
@@ -26,7 +27,7 @@ function statusLabel(status) {
 
 export function TriageQueue({ alerts, now, selected, onSelect }) {
   return <section className="hud-panel triage-panel" aria-label="Triage queue">
-    <PanelHeading>TRIAGE QUEUE</PanelHeading>
+    <PanelHeading>ALERTS</PanelHeading>
     <div className="triage-scroll">
       {alerts.length === 0 && <div className="panel-empty">AWAITING FLEET ALERTS</div>}
       {alerts.map((alert) => <button
@@ -39,8 +40,8 @@ export function TriageQueue({ alerts, now, selected, onSelect }) {
           <span className={`triage-status ${alert.status}`}>{statusLabel(alert.status)}</span>
         </span>
         <span className="triage-times">
-          <span className="aos num">AOS {formatCountdown(alert.next_contact_aos, now)}</span>
-          <span className="ttc num">TTC {formatDuration(alert.time_to_critical_s)}</span>
+          <span className="aos num">NEXT PASS {formatCountdown(alert.next_contact_aos, now)}</span>
+          <span className="ttc num">TIME LEFT {formatDuration(alert.time_to_critical_s)}</span>
         </span>
       </button>)}
     </div>
@@ -94,15 +95,20 @@ export function ProvenanceLegend({ localPreview }) {
   </section>;
 }
 
+function Chevron({ className }) {
+  return <svg className={className} viewBox="0 0 12 24" focusable="false"><path d="M3 4l7 8-7 8" /></svg>;
+}
+
 export function TopBar({ phase, mode, time, speed, hasVerification, muted, onToggleVoice,
   skyVisible, onToggleSky, anatomyOn, onToggleAnatomy, mcOn, onToggleMc }) {
-  const activeStage = phase === 'approval' || phase === 'fastforward' || phase === 'reveal'
-    ? 2 : hasVerification ? 1 : 0;
-  const complete = phase === 'fastforward' || phase === 'reveal';
   return <header className="top-bar">
     <div className="top-brand"><strong>PENUMBRA</strong></div>
-    <div className="stage-stepper" aria-label="AI proposes, physics verifies, humans approve">
-      {['AI PROPOSES', 'PHYSICS VERIFIES', 'HUMAN APPROVES'].map((label, index) => <div className={`stage ${complete ? 'done' : activeStage === index ? 'active' : ''}`} key={label}>{label}</div>)}
+    <div className="stage-stepper" aria-label={STEPPER_LABEL}>
+      {stepperItems(phase, hasVerification).map((item) => item.kind === 'arrow'
+        ? <span className={`stage-arrow ${item.state}${item.last ? ' last' : ''}`} aria-hidden="true" key={item.key}>
+          <Chevron className="chevron-base" /><Chevron className="chevron-fill" /></span>
+        : <div className={`stage ${item.state}${item.last ? ' last' : ''}`} key={item.key}>
+          <span className="stage-label">{item.label}</span></div>)}
     </div>
     <div className="top-status"><span className="mode-chip">{mode}</span>
       <button type="button" className="sky-chip" aria-pressed={skyVisible}
@@ -128,14 +134,14 @@ export function DirectorSlot({ phase, approval, result, refusal, execution, pend
     {phase === 'attract' ? <IncidentPicker state={incident} dispatch={dispatchIncident} pending={pending}
       onStart={onStartIncident} onStartRecorded={onStartStorm} runLive={runLive} onToggleRunLive={onToggleRunLive} />
     : canReveal ? <button className="director-action reveal" onClick={onReveal} disabled={pending}>
-      {pending ? 'REVEALING…' : 'REVEAL TRUTH'}
+      {pending ? 'SHOWING…' : 'SHOW WHAT HAPPENED'}
     </button> : executed ? <div className="director-executed">EXECUTED · {execution.plan_id}
       {phase === 'fastforward' && <small>Following the next eclipse at 600×</small>}
     </div> : approval && result ? <>
       <button className={`director-action ${failed ? 'failed' : 'verified'}`}
         onClick={onApprove} disabled={pending || !currentHash}>
         <span>{pending ? 'CHECKING…' : `APPROVE ${result.plan_id}`}</span>
-        <small>TIER {approval.tier} · HASH {hashPrefix(result.plan_hash)}</small>
+        <small>{approvalTierLine(approval.tier, hashPrefix(result.plan_hash))}</small>
         {failed && <small>FAILED VERIFICATION · PHYSICS WILL VETO</small>}
       </button>
     </> : <div className="director-wait">Waiting for a verified plan</div>}

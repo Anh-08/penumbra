@@ -12,12 +12,21 @@ button { font: inherit; }
 .top-bar { position: absolute; z-index: var(--z-top); inset: 0 0 auto; height: var(--top-h); display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); padding: 0 var(--sp-5); border-bottom: 1px solid var(--c-line-strong); background: rgba(5, 8, 13, .94); }
 .top-brand { display: flex; align-items: baseline; gap: var(--sp-4); white-space: nowrap; }
 .top-brand strong { font: 600 22px var(--font-cond); letter-spacing: .2em; }
-.stage-stepper { display: flex; gap: var(--sp-6); align-items: stretch; align-self: stretch; }
-.stage { position: relative; display: grid; align-items: center; color: var(--c-ink-3); font: 600 var(--fs-2m) var(--font-cond); white-space: nowrap; letter-spacing: .01em; }
-.stage.active { color: var(--c-ink); }
-.stage.active::after { content: ''; height: 3px; background: var(--c-ink); position: absolute; bottom: 0; left: 0; right: 0; }
-.stage:last-child.active { color: var(--c-alert); }.stage:last-child.active::after { background: var(--c-alert); }
-.stage.done { color: var(--c-verified); }.stage.done::after { content: ''; height: 3px; background: var(--c-verified); position: absolute; bottom: 0; left: 0; right: 0; }
+/* Progress stepper (T41): AI PLAN > VERIFICATION > APPROVAL. Not interactive. When a stage becomes active, the arrow
+   into it and then the stage (text + underline) fill left to right, about 600 ms in all; leaving a stage is instant,
+   and the reduced-motion tokens make the fill instant too. */
+.stage-stepper { display: flex; gap: var(--sp-3); align-items: stretch; align-self: stretch; cursor: default; user-select: none; }
+.stage, .stage-arrow { --stage-fill: var(--c-ink); position: relative; display: grid; align-items: center; }
+.stage.last.active, .stage-arrow.last.active { --stage-fill: var(--c-alert); }
+.stage.done, .stage-arrow.done { --stage-fill: var(--c-verified); }
+.stage-label { font: 600 var(--fs-2m) var(--font-cond); white-space: nowrap; letter-spacing: .01em; color: transparent; background: linear-gradient(90deg, var(--stage-fill) 50%, var(--c-ink-3) 50%) 100% 0 / 200% 100% no-repeat; -webkit-background-clip: text; background-clip: text; }
+.stage::after { content: ''; height: 3px; background: var(--stage-fill); position: absolute; bottom: 0; left: 0; right: 0; transform: scaleX(0); transform-origin: left; }
+.stage.active .stage-label, .stage.done .stage-label { background-position: 0 0; transition: background-position var(--dur-3) ease-out var(--dur-2); }
+.stage.active::after, .stage.done::after { transform: scaleX(1); transition: transform var(--dur-3) ease-out var(--dur-2); }
+.stage-arrow svg { grid-area: 1 / 1; width: 14px; height: 26px; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.stage-arrow .chevron-base { stroke: var(--c-ink-3); }
+.stage-arrow .chevron-fill { stroke: var(--stage-fill); clip-path: inset(0 100% 0 0); }
+.stage-arrow.active .chevron-fill, .stage-arrow.done .chevron-fill { clip-path: inset(0 0 0 0); transition: clip-path var(--dur-2) linear; }
 .top-status { display: flex; align-items: center; gap: var(--sp-4); white-space: nowrap; }
 .mode-chip, .speed-chip { border: 1px solid var(--c-line-strong); border-radius: var(--r-1); padding: 4px 7px; color: var(--c-ink-2); font: 500 var(--fs-label) var(--font-cond); letter-spacing: .04em; }
 .top-status time { font: var(--fs-title) var(--font-data); font-variant-numeric: tabular-nums slashed-zero; }
@@ -90,7 +99,7 @@ button { font: inherit; }
 .fleet-ticker { position: absolute; z-index: var(--z-hud); left: var(--inset); right: calc(var(--rc-w) + 2 * var(--gap)); bottom: var(--inset); height: 56px; display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); padding: 0 var(--sp-4); background: var(--c-panel); border: 1px solid var(--c-line-strong); border-radius: var(--r-2); color: var(--c-ink-2); font-size: var(--fs-data); backdrop-filter: var(--blur-panel); }
 
 @media (max-width: 1599px), (max-height: 950px) {
-  .top-bar { padding: 0 var(--sp-3); }.top-brand strong { font-size: 18px; }.stage-stepper { gap: var(--sp-4); }.top-status { gap: var(--sp-2); }
+  .top-bar { padding: 0 var(--sp-3); }.top-brand strong { font-size: 18px; }.stage-stepper { gap: var(--sp-2); }.top-status { gap: var(--sp-2); }
   .triage-panel { top: 60px; height: 316px; }.triage-row { min-height: 56px; }.triage-line strong { font-size: var(--fs-2m); }
   .hypothesis-panel { top: 388px; height: 244px; }.hypothesis-row { min-height: 32px; grid-template-columns: 26px minmax(0, 1fr) 76px 40px; }.hyp-bar { height: 6px; }.ruled-label { display: none; }
   .trace-panel { padding: var(--sp-2) var(--sp-3); }.trace-caption { height: 30px; }.trace-heading { height: 16px; }.trace-rows { height: calc(100% - 46px); }.trace-row { min-height: 22px; grid-template-columns: 145px minmax(0, 1fr) 180px; }
