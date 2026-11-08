@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from contracts import (
     DEMO_SPEED,
@@ -23,6 +23,7 @@ from contracts import (
     DemoStateMsg,
     ExecutionMsg,
     RevealMsg,
+    SAT_IDS,
     SatId,
     ScenarioRequest,
 )
@@ -52,6 +53,40 @@ class StormResponse(BaseModel):
 
 class StormRequest(BaseModel):
     live: bool = False
+
+
+class IncidentItem(BaseModel):
+    sat_id: str
+    fault: str
+
+
+class IncidentRequest(BaseModel):
+    """T42: the judge's incident. Satellite ids and fault ids are checked by scenarios.normalize_incidents."""
+    incidents: list[IncidentItem]
+    seed: int = Field(default=0, ge=0)
+
+
+class IncidentResponse(BaseModel):
+    started: bool
+    alert_count: int
+    mode: str
+
+
+class FaultOption(BaseModel):
+    id: str
+    label: str
+
+
+class IncidentOptions(BaseModel):
+    sats: list[str]
+    faults: list[FaultOption]
+    max_incidents: int
+    live_available: bool
+
+
+def live_available() -> bool:
+    """A model key in the environment and not offline (the key itself is never read out)."""
+    return bool(os.environ.get("GEMINI_API_KEY")) and os.environ.get("PENUMBRA_OFFLINE") != "1"
 
 
 class ClockResponse(BaseModel):
@@ -243,6 +278,38 @@ def create_app(provider: Any | None = None, voice: Voice | None = None,
                 publish("callout", CalloutMsg(text=f"{alert.sat_id} requires attention", priority=2))
         enter_agent_after_alerts(events)
         return StormResponse(started=True, alert_count=len(alerts))
+
+    @app.get("/api/incident/options", response_model=IncidentOptions)
+    async def incident_options() -> IncidentOptions:
+        from backend.fleet.scenarios import FAULT_MENU, MAX_INCIDENTS
+
+        return IncidentOptions(sats=list(SAT_IDS), faults=[FaultOption(id=f["id"], label=f["label"]) for f in FAULT_MENU],
+                               max_incidents=MAX_INCIDENTS,
+                               live_available=live_available() and app.state.storm is not None)
+
+    @app.post("/api/incident", response_model=IncidentResponse)
+    async def incident(request: IncidentRequest) -> IncidentResponse:
+        """T42: run the judge's incident live on the chosen satellites (no recording, so no replay fallback)."""
+        from backend.fleet.scenarios import normalize_incidents
+
+        try:
+            pairs = normalize_incidents([item.model_dump() for item in request.incidents])
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        storm = app.state.storm
+        if storm is not None and storm.busy:
+            raise HTTPException(status_code=409, detail="incident is already running")
+        if storm is None or not live_available():
+            raise HTTPException(status_code=409, detail="live planning is unavailable on this server (no model key)")
+        if not scenario_ready():
+            raise HTTPException(status_code=503, detail="scenario is not ready")
+        app.state.run_live = True
+        app.state.scenario_task = asyncio.create_task(
+            asyncio.to_thread(source.start_storm, 'custom', request.seed, incidents=pairs))
+        await app.state.scenario_task
+        clock.reset(source.t0)
+        storm.start(True, [sat for sat, _ in pairs])
+        return IncidentResponse(started=True, alert_count=0, mode="live")
 
     @app.post("/api/demo", response_model=DemoStateMsg)
     async def demo(request: DemoRequest) -> DemoStateMsg:

@@ -93,10 +93,11 @@ class RealProvider:
         with self._lock:
             self._held = fleet_state_from_backend(self.backend, self.backend.now(), 0.0)
 
-    def start_storm(self, name: str, seed: int) -> None:
-        """Build the storm scenario and freeze its clock in one step, so no fleet tick advances the new world."""
+    def start_storm(self, name: str, seed: int, **kw: Any) -> None:
+        """Build the storm scenario (or the judge's `custom` incident, kw incidents=[...]) and freeze its clock in
+        one step, so no fleet tick advances the new world."""
         with self._lock:
-            self.set_scenario(name, seed)
+            self.set_scenario(name, seed, **kw)
             self.hold()
 
     def activate(self, dispatcher: Any) -> None:
@@ -112,12 +113,12 @@ class RealProvider:
             self._routes[ticket.plan_hash] = dispatcher
             return ticket
 
-    def set_scenario(self, name: str, seed: int) -> None:
+    def set_scenario(self, name: str, seed: int, **kw: Any) -> None:
         from backend.agent.dispatcher import Dispatcher
         from backend.fleet.backend import FleetBackend
         from backend.fleet.scenarios import build
 
-        scenario = build(name, seed)
+        scenario = build(name, seed, **kw)
         backend = FleetBackend(scenario)
         dispatcher = Dispatcher(backend)
         with self._lock:
