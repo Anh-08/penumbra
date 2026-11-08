@@ -19,10 +19,10 @@ def fleet_state_from_backend(backend: Any, t: float, speed: float) -> FleetState
     positions = orbit.positions(t)
     statuses = {_field(row, "sat_id"): _field(row, "status") for row in backend.triage()}
     sats = []
-    for index, sat_id in enumerate(SAT_IDS):
+    for sat_id in SAT_IDS:
         position = positions[sat_id]
         latest_soc = backend.world.latest(sat_id)["soc"]
-        soc = latest_soc if math.isfinite(latest_soc) else float(backend.scenario.initial.soc[index])
+        soc = latest_soc if math.isfinite(latest_soc) else None
         sats.append({
             "sat_id": sat_id,
             "lat_deg": position["lat_deg"],

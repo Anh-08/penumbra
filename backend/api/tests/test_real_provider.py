@@ -20,7 +20,7 @@ def test_fleet_state_uses_real_stack_orbit_latest_downlink_and_triage():
             return {"soc": .42}
 
     class Backend:
-        scenario = SimpleNamespace(orbit=Orbit(), initial=SimpleNamespace(soc=[.75] * 24))
+        scenario = SimpleNamespace(orbit=Orbit())
         world = World()
 
         def __init__(self):
@@ -42,7 +42,7 @@ def test_fleet_state_uses_real_stack_orbit_latest_downlink_and_triage():
     assert state.sun_direction == (1, 0, 0)
 
 
-def test_fleet_state_uses_simulated_initial_soc_before_first_downlink_so_json_is_valid():
+def test_fleet_state_marks_soc_unknown_before_first_downlink_so_json_is_valid():
     class Orbit:
         def positions(self, t):
             return {sat_id: {"lat_deg": 1, "lon_deg": 2, "alt_km": 500, "illum": 1}
@@ -53,10 +53,10 @@ def test_fleet_state_uses_simulated_initial_soc_before_first_downlink_so_json_is
 
     backend = SimpleNamespace(
         advance_to=lambda t: None,
-        scenario=SimpleNamespace(orbit=Orbit(), initial=SimpleNamespace(soc=[.75] * 24)),
+        scenario=SimpleNamespace(orbit=Orbit()),
         world=SimpleNamespace(latest=lambda sat_id: {"soc": nan}),
         triage=lambda: [],
     )
     state = fleet_state_from_backend(backend, 1_800_000_000.0, 120)
-    assert state.sats[0].soc == .75
+    assert state.sats[0].soc is None
     json.dumps(state.model_dump(mode="json"), allow_nan=False)
