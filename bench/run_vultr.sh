@@ -18,6 +18,7 @@ docker run --rm --network none --memory=3g --cpus=2 --user root \
   --volume "$repo_dir/bench:/app/bench" --workdir /app penumbra \
   python -m bench.b4 --output bench/results/b4_vultr.json \
   --machine-label "Vultr vc2-2c-4gb (Ubuntu 24.04, New York)" \
-  --vcpu 2 --ram-gb 4 --limit-ram-gib 3
+  --provider Vultr --plan vc2-2c-4gb \
+  --vcpu 2 --vcpus 2 --ram-gb 4 --ram-gib 4 --limit-ram-gib 3
 
 echo "Wrote $repo_dir/bench/results/b4_vultr.json"

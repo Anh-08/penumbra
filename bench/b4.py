@@ -168,14 +168,22 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--requests", type=int, default=24)
     ap.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     ap.add_argument("--machine-label", help="Name of the machine that produced the measurement")
+    ap.add_argument("--provider", help="Cloud or machine provider")
+    ap.add_argument("--plan", help="Instance plan name")
     ap.add_argument("--vcpu", type=int, help="Instance vCPU count")
+    ap.add_argument("--vcpus", type=int, help="Instance vCPU count for the scale slider")
     ap.add_argument("--ram-gb", type=float, help="Instance advertised physical RAM in GB")
+    ap.add_argument("--ram-gib", type=float, help="Instance RAM value for the scale slider")
     ap.add_argument("--limit-ram-gib", type=float, help="Container RAM limit in GiB")
     args = ap.parse_args(argv)
     if args.vcpu is not None and args.vcpu < 1:
         ap.error("--vcpu must be positive")
+    if args.vcpus is not None and args.vcpus < 1:
+        ap.error("--vcpus must be positive")
     if args.ram_gb is not None and args.ram_gb <= 0:
         ap.error("--ram-gb must be positive")
+    if args.ram_gib is not None and args.ram_gib <= 0:
+        ap.error("--ram-gib must be positive")
     if args.limit_ram_gib is not None and args.limit_ram_gib <= 0:
         ap.error("--limit-ram-gib must be positive")
     if args.case == "planning":
@@ -187,10 +195,18 @@ def main(argv: list[str] | None = None) -> None:
         result = run_all()
         if args.machine_label:
             result["machine"]["label"] = args.machine_label
+        if args.provider:
+            result["machine"]["provider"] = args.provider
+        if args.plan:
+            result["machine"]["plan"] = args.plan
         if args.vcpu is not None:
             result["machine"]["vcpu"] = args.vcpu
+        if args.vcpus is not None:
+            result["machine"]["vcpus"] = args.vcpus
         if args.ram_gb is not None:
             result["machine"]["ram_gb"] = args.ram_gb
+        if args.ram_gib is not None:
+            result["machine"]["ram_gib"] = args.ram_gib
         if args.limit_ram_gib is not None:
             result["machine"]["container_ram_limit_gib"] = args.limit_ram_gib
         args.output.parent.mkdir(parents=True, exist_ok=True)

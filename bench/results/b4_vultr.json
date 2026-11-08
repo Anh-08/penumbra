@@ -1,0 +1,182 @@
+{
+ "benchmark": "B4 scale (T24)",
+ "generated_utc": "2026-11-08T05:14:22+00:00",
+ "machine": {
+  "python": "3.11.18",
+  "numpy": "2.4.6",
+  "cpus": 2,
+  "platform": "Linux-6.8.0-147-generic-x86_64-with-glibc2.41",
+  "label": "Vultr vc2-2c-4gb (Ubuntu 24.04, New York)",
+  "provider": "Vultr",
+  "plan": "vc2-2c-4gb",
+  "vcpu": 2,
+  "vcpus": 2,
+  "ram_gb": 4.0,
+  "ram_gib": 4.0,
+  "container_ram_limit_gib": 3.0
+ },
+ "n": {
+  "planning_cases": 4,
+  "scheduler_cases": 2,
+  "runs_per_case": 1
+ },
+ "seeds": {
+  "monte_carlo_and_requests": 24
+ },
+ "settings": {
+  "scale": {
+   "dtype": "float32",
+   "step_s": 60,
+   "hours": 3.0,
+   "monte_carlo": 20
+  },
+  "operational": {
+   "dtype": "float64",
+   "step_s": 10,
+   "hours": 24.0,
+   "monte_carlo": 100
+  },
+  "plans": [
+   "no-op",
+   "SET_PAYLOAD_DUTY 0.2",
+   "SAFE_MODE"
+  ],
+  "hypotheses": [
+   "H0",
+   "H1",
+   "H2",
+   "H3",
+   "H4",
+   "H5"
+  ]
+ },
+ "planning_scale": [
+  {
+   "satellites": 24,
+   "hypotheses": 6,
+   "plans": 3,
+   "monte_carlo": 20,
+   "batch_elements": 8640,
+   "steps": 180,
+   "step_s": 60,
+   "hours": 3.0,
+   "dtype": "float32",
+   "evals": 1555200,
+   "evals_per_s": 7296729.7,
+   "setup_s": 0.013,
+   "wall_s": 0.227,
+   "peak_ram_mib": 237.7,
+   "check_min_soc_range": [
+    0.06,
+    0.825
+   ]
+  },
+  {
+   "satellites": 1000,
+   "hypotheses": 6,
+   "plans": 3,
+   "monte_carlo": 20,
+   "batch_elements": 360000,
+   "steps": 180,
+   "step_s": 60,
+   "hours": 3.0,
+   "dtype": "float32",
+   "evals": 64800000,
+   "evals_per_s": 9586843.2,
+   "setup_s": 0.161,
+   "wall_s": 6.983,
+   "peak_ram_mib": 211.1,
+   "check_min_soc_range": [
+    0.0,
+    0.83
+   ]
+  },
+  {
+   "satellites": 10000,
+   "hypotheses": 6,
+   "plans": 3,
+   "monte_carlo": 20,
+   "batch_elements": 3600000,
+   "steps": 180,
+   "step_s": 60,
+   "hours": 3.0,
+   "dtype": "float32",
+   "evals": 648000000,
+   "evals_per_s": 7929750.1,
+   "setup_s": 1.56,
+   "wall_s": 84.298,
+   "peak_ram_mib": 1580.8,
+   "check_min_soc_range": [
+    0.0,
+    0.843
+   ]
+  }
+ ],
+ "planning_operational_24": {
+  "satellites": 24,
+  "hypotheses": 6,
+  "plans": 3,
+  "monte_carlo": 100,
+  "batch_elements": 43200,
+  "steps": 8640,
+  "step_s": 10,
+  "hours": 24.0,
+  "dtype": "float64",
+  "evals": 373248000,
+  "evals_per_s": 6057095.9,
+  "setup_s": 0.031,
+  "wall_s": 61.708,
+  "peak_ram_mib": 125.5,
+  "check_min_soc_range": [
+   0.0,
+   0.828
+  ]
+ },
+ "scheduler": [
+  {
+   "requests": 24,
+   "satellites": 24,
+   "stations": 3,
+   "contacts": 597,
+   "solver": "cpsat",
+   "optimal": true,
+   "solve_ms": 89.1,
+   "wall_ms": 89.9,
+   "scheduled": 24,
+   "unscheduled": 0,
+   "time_limit_s": 7.0,
+   "peak_ram_mib": 119.9
+  },
+  {
+   "requests": 200,
+   "satellites": 24,
+   "stations": 3,
+   "contacts": 597,
+   "solver": "cpsat",
+   "optimal": true,
+   "solve_ms": 1474.8,
+   "wall_ms": 1486.8,
+   "scheduled": 200,
+   "unscheduled": 0,
+   "time_limit_s": 7.0,
+   "peak_ram_mib": 151.7
+  }
+ ],
+ "notes": [
+  "Planning: batch shape (satellites, 6 hypotheses, 3 plans, Monte Carlo); running min/max only, no time history. evals = batch elements x time steps. Each case is a fresh subprocess; peak_ram_mib is its ru_maxrss and includes the Python, numpy and orbit-data baseline.",
+  "The 1,000 and 10,000 satellite fleets repeat the 24 real illumination rows; they are a load test, not real satellites.",
+  "Scheduler: the contract caps the fleet at SAT-01..SAT-24, so 200 means 200 uplink requests over the 24 satellites and 3 stations (B1 decision 2026-11-08T00:25Z, confirmed by B). solve_ms is reported by the scheduler; CP-SAT time limit 7 s."
+ ],
+ "data": {
+  "real": [
+   "24 satellite orbits (cached public OMM elements, renamed SAT-01..SAT-24)",
+   "Sun/Earth geometry (JPL DE421) and the illumination derived from it",
+   "ground station sites and 10 deg contact windows"
+  ],
+  "simulated": [
+   "EPS state and Monte Carlo perturbations (seeded)",
+   "uplink requests (seeded priorities and deadlines)",
+   "satellites 25..10,000 (copies of the 24 real illumination rows)"
+  ]
+ }
+}
