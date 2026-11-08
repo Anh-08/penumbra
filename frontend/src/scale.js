@@ -24,10 +24,15 @@ export function machineLabel(b4) {
   const machine = b4?.machine;
   if (!machine) return 'machine not recorded';
   const platform = String(machine.platform ?? '');
-  const os = platform.split('-')[0] || 'unknown OS';
+  const os = platform.split('-')[0] || null;
   const arch = (platform.match(/x86_64|aarch64|arm64|amd64/) ?? [''])[0];
-  return [os + (arch ? ` ${arch}` : ''), machine.cpus ? `${machine.cpus} CPUs` : null,
-    machine.python ? `Python ${machine.python}` : null].filter(Boolean).join(' · ');
+  const name = [machine.provider, machine.instance ?? machine.plan ?? machine.name].filter(Boolean).join(' ');
+  const cpus = machine.vcpus ?? machine.vcpu ?? machine.cpus;
+  const ram = machine.ram_gib ?? machine.memory_gib ?? (machine.ram_mib ? machine.ram_mib / 1024 : null);
+  return [name || null, os ? os + (arch ? ` ${arch}` : '') : null,
+    cpus ? `${cpus} ${machine.vcpus ?? machine.vcpu ? 'vCPUs' : 'CPUs'}` : null,
+    Number.isFinite(Number(ram)) && ram ? `${Number(ram).toFixed(0)} GiB RAM` : null,
+    machine.python ? `Python ${machine.python}` : null].filter(Boolean).join(' · ') || 'machine not recorded';
 }
 
 export function formatRate(evalsPerSecond) {
@@ -42,4 +47,18 @@ export function formatSeconds(seconds) {
 
 export function solverLabel(solver) {
   return solver === 'cpsat' ? 'CP-SAT' : String(solver ?? '').toUpperCase();
+}
+
+// Machines (T33): the laptop run is b4.json; a cloud run, when present, is b4_vultr.json. Each is labeled with
+// its own machine block, so the two sets of numbers are never mixed up.
+export const MACHINE_FILES = [
+  { file: 'b4.json', id: 'laptop', title: 'LAPTOP' },
+  { file: 'b4_vultr.json', id: 'vultr', title: 'VULTR' },
+];
+
+export function benchMachines(bench) {
+  return MACHINE_FILES.flatMap(({ file, id, title }) => {
+    const b4 = bench?.results?.[file];
+    return b4 ? [{ id, title, b4 }] : [];
+  });
 }
