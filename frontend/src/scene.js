@@ -4,23 +4,85 @@ import {
   Cartesian3,
   Color,
   DirectionalLight,
+  HeadingPitchRoll,
+  HeightReference,
   Ion,
   JulianDate,
   Matrix4,
   Matrix3,
+  Material,
   Quaternion,
+  PolylineCollection,
+  ScreenSpaceEventType,
   TileMapServiceImageryProvider,
   Transforms,
   Viewer,
+  VerticalOrigin,
   buildModuleUrl,
 } from 'cesium';
 import { markerAlpha, orbitTrack, STATIONS } from './mockFleet.js';
+import { createPinState, reducePin } from './pinState.js';
+import constellations from './data/constellations.json' with { type: 'json' };
+import buffaloPinUrl from './assets/buffalo-pin.svg';
 
 const EARTH_RADIUS_M = 6_371_000;
 const SHADOW_LENGTH_M = 15_000_000;
 const teal = Color.fromCssColorString('#65e9df');
 const amber = Color.fromCssColorString('#f6ad58');
 const red = Color.fromCssColorString('#f26f75');
+const BUFFALO = { lat: 42.886, lon: -78.878 };
+const CELESTIAL_RADIUS_M = 1_000_000_000;
+
+function addConstellations(viewer) {
+  // J2000 positions: HYG v3.8; line sets: Stellarium western sky culture.
+  // Full source URLs and transformations are recorded in data/constellations.json.
+  const lines = viewer.scene.primitives.add(new PolylineCollection());
+  const white = Color.WHITE.withAlpha(0.24);
+  for (const constellation of constellations.constellations) {
+    for (const line of constellation.lines) {
+      lines.add({
+        positions: line.map((hip) => {
+          const [raDeg, decDeg] = constellation.stars[hip];
+          const ra = raDeg * Math.PI / 180;
+          const dec = decDeg * Math.PI / 180;
+          return new Cartesian3(
+            CELESTIAL_RADIUS_M * Math.cos(dec) * Math.cos(ra),
+            CELESTIAL_RADIUS_M * Math.cos(dec) * Math.sin(ra),
+            CELESTIAL_RADIUS_M * Math.sin(dec),
+          );
+        }),
+        width: 1,
+        material: Material.fromType('Color', { color: white }),
+      });
+    }
+  }
+  return lines;
+}
+
+function addBuffaloPin(viewer) {
+  return viewer.entities.add({
+    id: 'buffalo-pin',
+    name: 'BUFFALO',
+    position: Cartesian3.fromDegrees(BUFFALO.lon, BUFFALO.lat),
+    billboard: {
+      image: buffaloPinUrl,
+      width: 22,
+      height: 34,
+      verticalOrigin: VerticalOrigin.BOTTOM,
+      heightReference: HeightReference.CLAMP_TO_GROUND,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+    label: {
+      text: 'BUFFALO',
+      font: '600 12px "JetBrains Mono", monospace',
+      fillColor: Color.WHITE,
+      outlineColor: Color.BLACK,
+      outlineWidth: 2,
+      pixelOffset: new Cartesian2(0, -45),
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+  });
+}
 
 function colorFor(sat) {
   if (sat.illum < 0.05) return red.withAlpha(markerAlpha(sat.illum));
@@ -118,9 +180,13 @@ export function createScene(container, initialState, onSelect) {
   viewer.scene.globe.enableLighting = true;
   viewer.scene.globe.showGroundAtmosphere = true;
   viewer.scene.fog.enabled = false;
-  viewer.scene.sun.show = false;
-  viewer.scene.moon.show = false;
-  viewer.scene.skyBox.show = false;
+  viewer.scene.skyAtmosphere.show = true;
+  viewer.scene.sun.show = true;
+  viewer.scene.moon.show = true;
+  viewer.scene.skyBox.show = true;
+  viewer.scene.highDynamicRange = false;
+  viewer.scene.postProcessStages.bloom.enabled = false;
+  viewer.clock.shouldAnimate = false;
   const cameraPosition = Cartesian3.fromDegrees(-22, 18, 12_000_000);
   viewer.camera.setView({
     destination: cameraPosition,
@@ -137,6 +203,9 @@ export function createScene(container, initialState, onSelect) {
 
   addStations(viewer);
   const shadow = addShadow(viewer);
+  const skyLines = addConstellations(viewer);
+  skyLines.show = true;
+  const buffaloPin = addBuffaloPin(viewer);
   const markers = new Map();
   const tracks = new Map();
   for (const sat of initialState.sats) {
@@ -180,6 +249,47 @@ export function createScene(container, initialState, onSelect) {
     if (entity && markers.has(entity.name)) onSelect(entity.name);
   });
 
+  let pinState = createPinState();
+  let returningToBuffalo = false;
+  const flyToBuffalo = (duration, complete = () => {}) => viewer.camera.flyTo({
+    destination: Cartesian3.fromDegrees(BUFFALO.lon, BUFFALO.lat, 8_000_000),
+    orientation: new HeadingPitchRoll(0, -Math.PI / 2, 0),
+    duration,
+    complete,
+    cancel: complete,
+  });
+  const togglePin = () => {
+    const wasParked = pinState.parked;
+    pinState = reducePin(pinState, 'toggle', performance.now());
+    if (wasParked) {
+      returningToBuffalo = true;
+      flyToBuffalo(0.8, () => { returningToBuffalo = false; });
+    } else flyToBuffalo(1.5);
+  };
+  const previousClick = viewer.screenSpaceEventHandler.getInputAction(ScreenSpaceEventType.LEFT_CLICK);
+  viewer.screenSpaceEventHandler.setInputAction((click) => {
+    if (viewer.scene.pick(click.position)?.id === buffaloPin) togglePin();
+    else previousClick?.(click);
+  }, ScreenSpaceEventType.LEFT_CLICK);
+  const onKeyDown = (event) => {
+    if (event.key.toLowerCase() === 'b' && !event.repeat && !event.altKey && !event.ctrlKey && !event.metaKey
+      && !['INPUT', 'TEXTAREA'].includes(event.target?.tagName)) togglePin();
+    else if (pinState.parked) pinState = reducePin(pinState, 'activity', performance.now());
+  };
+  const onPointerActivity = (event) => {
+    if (pinState.parked && event.buttons) pinState = reducePin(pinState, 'activity', performance.now());
+  };
+  const onInputActivity = () => {
+    if (pinState.parked) pinState = reducePin(pinState, 'activity', performance.now());
+  };
+  window.addEventListener('keydown', onKeyDown);
+  viewer.scene.canvas.addEventListener('pointermove', onPointerActivity);
+  viewer.scene.canvas.addEventListener('pointerdown', onInputActivity);
+  viewer.scene.canvas.addEventListener('wheel', onInputActivity);
+  const idleTimer = window.setInterval(() => {
+    if (pinState.parked && performance.now() >= pinState.idleAt) togglePin();
+  }, 250);
+
   let previousFrame = performance.now();
   let previousTrackTime = initialState.t;
   let motionActive = true;
@@ -187,12 +297,15 @@ export function createScene(container, initialState, onSelect) {
     const now = performance.now();
     const elapsed = Math.min((now - previousFrame) / 1000, 0.1);
     previousFrame = now;
-    if (motionActive) viewer.camera.rotate(Cartesian3.UNIT_Z, elapsed * 0.018);
+    if (motionActive && !pinState.parked && !returningToBuffalo) viewer.camera.rotate(Cartesian3.UNIT_Z, elapsed * 0.018);
   };
   viewer.scene.preRender.addEventListener(moveCamera);
 
   const update = (state) => {
     viewer.clock.currentTime = JulianDate.fromDate(new Date(state.t * 1000));
+    const inertialToFixed = Transforms.computeIcrfToFixedMatrix(viewer.clock.currentTime)
+      ?? Transforms.computeTemeToPseudoFixedMatrix(viewer.clock.currentTime);
+    skyLines.modelMatrix = Matrix4.fromRotationTranslation(inertialToFixed, Cartesian3.ZERO, new Matrix4());
     const sun = Cartesian3.fromElements(...state.sun_direction, new Cartesian3());
     viewer.scene.light = new DirectionalLight({
       direction: Cartesian3.negate(sun, new Cartesian3()),
@@ -230,6 +343,15 @@ export function createScene(container, initialState, onSelect) {
       for (const [satId, marker] of markers) marker.label.show = visible.has(satId);
     },
     setMotionActive: (active) => { motionActive = active; },
-    destroy: () => { viewer.scene.preRender.removeEventListener(moveCamera); viewer.destroy(); },
+    setSkyVisible: (visible) => { skyLines.show = visible; },
+    destroy: () => {
+      window.clearInterval(idleTimer);
+      window.removeEventListener('keydown', onKeyDown);
+      viewer.scene.canvas.removeEventListener('pointermove', onPointerActivity);
+      viewer.scene.canvas.removeEventListener('pointerdown', onInputActivity);
+      viewer.scene.canvas.removeEventListener('wheel', onInputActivity);
+      viewer.scene.preRender.removeEventListener(moveCamera);
+      viewer.destroy();
+    },
   };
 }
