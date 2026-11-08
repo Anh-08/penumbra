@@ -44,7 +44,7 @@ function ScheduleConflict({ conflict }) {
 }
 
 export function MatrixOverlay({ satId, matrix, hypotheses, conflict, status, selectedPlanId,
-  onSelectPlan, failingHypotheses, trajectory, telemetry, socMin }) {
+  onSelectPlan, failingHypotheses, trajectory, telemetry, socMin, chartPlanId, chartHypothesis }) {
   if (!matrix?.results.length) return null;
   const plans = matrix.results;
   const plausible = new Set(hypotheses?.plausible ?? plans[0].plausible ?? []);
@@ -91,7 +91,8 @@ export function MatrixOverlay({ satId, matrix, hypotheses, conflict, status, sel
     </div>
     <div className="matrix-lower">
       <ScheduleConflict conflict={conflict} />
-      <SocChart trajectory={trajectory} telemetry={telemetry} socMin={socMin} />
+      <SocChart trajectory={trajectory} telemetry={telemetry} socMin={socMin}
+        planId={chartPlanId} hypothesis={chartHypothesis} />
     </div>
   </section>;
 }

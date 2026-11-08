@@ -60,6 +60,7 @@ def create_app(provider: Any | None = None) -> FastAPI:
     t0 = getattr(source, "t0", datetime.now(timezone.utc).timestamp())
     clock = SimClock(t0=t0)
     listeners: set[asyncio.Queue[dict[str, Any]]] = set()
+    app.state.loop = None
     app.state.provider = source
     app.state.clock = clock
     app.state.scenario_task = None
@@ -68,23 +69,57 @@ def create_app(provider: Any | None = None) -> FastAPI:
         task = app.state.scenario_task
         return task is None or (task.done() and task.exception() is None)
 
-    def publish(kind: str, payload: Any) -> None:
-        message = validate_message(kind, payload)
+    def enqueue(message: dict[str, Any]) -> None:
         for listener in tuple(listeners):
             if listener.full():
                 listener.get_nowait()
             listener.put_nowait(message)
-        if kind == "matrix" and message["data"]["complete"]:
-            ticket_for = getattr(source, "operator_ticket", None)
-            if ticket_for is not None:
-                for result in message["data"]["results"]:
-                    publish("approval_request", ticket_for(result["plan_id"]))
+
+    async def after_matrix(message: dict[str, Any]) -> None:
+        results = message["data"]["results"]
+        ticket_for = getattr(source, "operator_ticket", None)
+        trajectory_for = getattr(source, "trajectory", None)
+
+        def compute() -> tuple[list[Any], Any | None]:
+            tickets = [ticket_for(result["plan_id"]) for result in results] if ticket_for else []
+            trajectory = None
+            if results and trajectory_for:
+                best = results[0]
+                plausible = [hyp for hyp in best["plausible"] if hyp in best["per_hyp"]]
+                if plausible:
+                    worst = min(plausible, key=lambda hyp: best["per_hyp"][hyp]["min_soc_p5"])
+                    trajectory = trajectory_for(best["plan_id"], worst)
+            return tickets, trajectory
+
+        tickets, trajectory = await asyncio.to_thread(compute)
+        for ticket in tickets:
+            publish("approval_request", ticket)
+        if trajectory is not None:
+            publish("trajectory", trajectory)
+
+    def publish(kind: str, payload: Any) -> None:
+        message = validate_message(kind, payload)
+        loop = app.state.loop
+        try:
+            running_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            running_loop = None
+        if loop is not None and running_loop is not loop:
+            loop.call_soon_threadsafe(enqueue, message)
+        else:
+            enqueue(message)
+        if kind == "matrix" and message["data"]["complete"] and loop is not None:
+            if running_loop is loop:
+                loop.create_task(after_matrix(message))
+            else:
+                loop.call_soon_threadsafe(lambda: loop.create_task(after_matrix(message)))
 
     app.state.publish = publish
 
     @app.websocket("/ws")
     async def websocket_fleet(websocket: WebSocket) -> None:
         await websocket.accept()
+        app.state.loop = asyncio.get_running_loop()
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=256)
         listeners.add(queue)
         next_fleet = time.monotonic()
@@ -109,6 +144,8 @@ def create_app(provider: Any | None = None) -> FastAPI:
             pass
         finally:
             listeners.discard(queue)
+            if not listeners:
+                app.state.loop = None
 
     @app.post("/api/scenario", response_model=ScenarioResponse)
     async def scenario(request: ScenarioRequest) -> ScenarioResponse:

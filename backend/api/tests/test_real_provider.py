@@ -4,6 +4,7 @@ from threading import RLock
 from types import SimpleNamespace
 
 from contracts import ApprovalRefused, SAT_IDS
+from backend.api.messages import validate_message
 from backend.api.real_provider import RealProvider, fleet_state_from_backend
 
 
@@ -106,3 +107,63 @@ def test_real_provider_preserves_dispatcher_physics_refusal():
     assert result.refused is True
     assert result.failing_hypotheses == ['H2']
     assert provider.executed == set()
+
+
+def test_reveal_has_no_fault_spec_for_an_executed_nominal_satellite():
+    provider = RealProvider.__new__(RealProvider)
+    provider._lock = RLock()
+    provider.executed = {'SAT-07'}
+    provider.backend = SimpleNamespace(world=SimpleNamespace(reveal=lambda sat_id: {'truth': None}))
+    assert provider.reveal('SAT-07') is None
+
+
+def _propose(provider, command_name):
+    backend = provider.backend
+    contact = backend.next_contact('SAT-07', backend.now())
+    outcome = provider.dispatcher.dispatch('propose_plan', {
+        'sat_id': 'SAT-07',
+        'commands': [{'t_exec': contact.aos + 10, 'name': command_name,
+                      'args': {'load': 'AUX'}}],
+    })
+    return outcome.result['plan_id']
+
+
+def test_real_fault_storm_red_plan_is_refused_with_failing_hypothesis(monkeypatch):
+    monkeypatch.setenv('PENUMBRA_OFFLINE', '1')
+    provider = RealProvider('fault-storm', 1)
+    provider.backend.advance_to(provider.t0 + 25000)
+    plan_id = _propose(provider, 'LOAD_ON')
+    sim = provider.dispatcher.dispatch('simulate', {
+        'plan_id': plan_id, 'hypotheses': 'all', 'monte_carlo': 12,
+    }).result
+    assert sim['passes_all'] is False
+    ticket = provider.operator_ticket(plan_id)
+    refusal = provider.approve(ticket.approval_id, ticket.plan_hash)
+    assert refusal.reason_key == 'failed_verification'
+    assert refusal.failing_hypotheses == ['H2']
+    assert provider.executed == set()
+
+
+def test_real_approved_plan_reveals_simulated_fault_after_execution(monkeypatch):
+    monkeypatch.setenv('PENUMBRA_OFFLINE', '1')
+    provider = RealProvider('fault-storm', 1)
+    provider.backend.advance_to(provider.t0 + 5000)
+    plan_id = _propose(provider, 'LOAD_OFF')
+    sim = provider.dispatcher.dispatch('simulate', {
+        'plan_id': plan_id, 'hypotheses': 'all', 'monte_carlo': 12,
+    }).result
+    assert sim['passes_all'] is True
+    matrix = validate_message('matrix', provider.matrix('SAT-07'))['data']
+    assert matrix['complete'] is True
+    assert matrix['results'][0]['plan_id'] == plan_id
+    hypothesis = min(sim['plausible'], key=lambda h: sim['per_hyp'][h]['min_soc_p5'])
+    trajectory = validate_message('trajectory', provider.trajectory(plan_id, hypothesis))['data']
+    assert trajectory['soc_p5'] and trajectory['soc_p95']
+    schedule = provider.dispatcher.dispatch('schedule_uplink', {'plan_id': plan_id}).result
+    assert schedule['scheduled'] is True
+    ticket = provider.operator_ticket(plan_id)
+    result = provider.approve(ticket.approval_id, ticket.plan_hash)
+    assert result.status == 'executed'
+    reveal = validate_message('reveal', provider.reveal('SAT-07'))['data']
+    assert reveal['truth']['kind'] == 'stuck_on_load'
+    assert reveal['truth_soc']['t']

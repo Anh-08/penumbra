@@ -112,6 +112,8 @@ class RealProvider:
             return None
         with self._lock:
             truth = self.backend.world.reveal(sat_id)
+            if truth.get("truth") is None:
+                return None
             scores = self.backend.score_hypotheses(sat_id).scores
             hypothesis = max(scores, key=scores.get)
             return {

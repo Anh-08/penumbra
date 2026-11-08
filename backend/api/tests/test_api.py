@@ -112,23 +112,34 @@ def test_slow_scenario_build_returns_without_blocking_api_startup():
 
 def test_complete_matrix_emits_one_operator_ticket_per_simulated_plan():
     class TicketProvider(MockProvider):
+        trajectory_calls = []
+
         def operator_ticket(self, plan_id):
             return {
                 'approval_id': f'AP-{plan_id[2:]}', 'plan_id': plan_id,
                 'plan_hash': 'sample-hash', 'sat_id': 'SAT-07', 'tier': 2, 'sim_id': 'S-1',
             }
 
+        def trajectory(self, plan_id, hypothesis):
+            self.trajectory_calls.append((plan_id, hypothesis))
+            return self.sample_messages()['trajectory']
+
     app = create_app(provider=TicketProvider(t0=1_800_000_000.0))
     with TestClient(app) as api:
         with api.websocket_connect('/ws') as ws:
             assert ws.receive_json()['type'] == 'fleet_state'
             matrix = api.app.state.provider.sample_messages()['matrix']
+            first = matrix['results'][0]
+            first['per_hyp']['H3'] = {**first['per_hyp']['H2'], 'min_soc_p5': .11}
+            first['plausible'].append('H3')
             matrix['complete'] = True
             api.app.state.publish('matrix', matrix)
             assert ws.receive_json()['type'] == 'matrix'
             ticket = ws.receive_json()
             assert ticket['type'] == 'approval_request'
             assert ticket['data']['plan_id'] == 'P-1'
+            assert ws.receive_json()['type'] == 'trajectory'
+            assert api.app.state.provider.trajectory_calls == [('P-1', 'H3')]
 
 
 def test_real_detector_alert_and_callout_use_its_messages_without_duplicates():

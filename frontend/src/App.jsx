@@ -2,7 +2,7 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import { buildFleetState } from './mockFleet.js';
 import { createScene } from './scene.js';
 import { createPanelState, reducePanel } from './panelState.js';
-import { createMatrixState, reduceMatrix, scheduleConflicts } from './matrixState.js';
+import { createMatrixState, reduceMatrix, scheduleConflicts, worstPlausibleHypothesis } from './matrixState.js';
 import { advanceEclipse, approvalPayload, createFlightState, reduceFlight } from './flightState.js';
 import { MatrixOverlay } from './Matrix.jsx';
 import { FlightOverlay } from './FlightOverlay.jsx';
@@ -166,6 +166,7 @@ function App() {
   const flightOpen = panel.phase === 'fastforward' || panel.phase === 'reveal';
   const activeResult = activeMatrix?.results.find((result) => result.plan_id === selectedPlanId)
     ?? activeMatrix?.results[0];
+  const chartResult = activeMatrix?.complete ? activeMatrix.results[0] : null;
   const activeApproval = flight.approvals[activeResult?.plan_id]?.sat_id === selected
     ? flight.approvals[activeResult.plan_id] : null;
   const activeRefusal = attemptPlanId === activeResult?.plan_id ? flight.refusal : null;
@@ -209,11 +210,13 @@ function App() {
       selectedPlanId={selectedPlanId} onSelectPlan={(planId) => {
         setSelectedPlanId(planId); setAttemptPlanId(null); dispatchFlight({ type: 'clear_refusal', data: {} });
       }} failingHypotheses={activeRefusal?.failing_hypotheses}
-      trajectory={flight.trajectory} telemetry={flight.telemetry[selected]} socMin={SOC_MIN} />}
+      trajectory={flight.trajectory} telemetry={flight.telemetry[selected]} socMin={SOC_MIN}
+      chartPlanId={chartResult?.plan_id} chartHypothesis={worstPlausibleHypothesis(chartResult)} />}
 
     {flightOpen && <FlightOverlay phase={panel.phase} satId={selected}
       trajectory={flight.trajectory} telemetry={flight.telemetry[selected]}
-      reveal={flight.reveals[selected]} socMin={SOC_MIN} />}
+      reveal={flight.reveals[selected]} socMin={SOC_MIN}
+      chartPlanId={chartResult?.plan_id} chartHypothesis={worstPlausibleHypothesis(chartResult)} />}
 
     <ProvenanceLegend localPreview={localPreview} />
     <DirectorSlot phase={panel.phase} approval={activeApproval} result={activeResult}

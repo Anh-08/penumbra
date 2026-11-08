@@ -30,14 +30,14 @@ function utc(t) {
   return Number.isFinite(t) ? new Date(t * 1000).toISOString().slice(11, 16) : '—';
 }
 
-export function SocChart({ trajectory, telemetry, truthSoc, socMin }) {
+export function SocChart({ trajectory, telemetry, truthSoc, socMin, planId, hypothesis }) {
   if (!trajectory?.t?.length) return <div className="chart-empty">AWAITING VERIFIER TRAJECTORY</div>;
   const first = trajectory.t[0];
   const last = trajectory.t.at(-1);
   const observed = observedPoints(trajectory, telemetry);
   const truthPath = truthSoc && pathFor(truthSoc.t, truthSoc.soc, first, last);
   return <section className="soc-chart" aria-label="State of charge trajectory">
-    <div className="chart-heading"><strong>STATE OF CHARGE</strong><span className="source-tag">SIM · VERIFIER</span></div>
+    <div className="chart-heading"><strong>STATE OF CHARGE · {planId ?? '—'} · {hypothesis ?? '—'} WORST PLAUSIBLE</strong><span className="source-tag">SIM · VERIFIER</span></div>
     <svg viewBox="0 0 1000 190" preserveAspectRatio="none" role="img" aria-label="Verifier SOC band, downlinked points, and optional revealed truth">
       <line className="chart-axis" x1={LEFT} x2={RIGHT} y1={BOTTOM} y2={BOTTOM} />
       <text className="chart-tick" x="2" y={TOP + 5}>100%</text>
