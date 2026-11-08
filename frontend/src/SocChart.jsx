@@ -37,7 +37,7 @@ export function SocChart({ trajectory, telemetry, truthSoc, socMin, planId, hypo
   const observed = observedPoints(trajectory, telemetry);
   const truthPath = truthSoc && pathFor(truthSoc.t, truthSoc.soc, first, last);
   return <section className="soc-chart" aria-label="State of charge trajectory">
-    <div className="chart-heading"><strong>STATE OF CHARGE · {planId ?? '—'} · {hypothesis ?? '—'} WORST PLAUSIBLE</strong><span className="source-tag">SIM · VERIFIER</span></div>
+    <div className="chart-heading"><strong>STATE OF CHARGE · {planId ?? '—'} · {hypothesis ?? '—'} WORST PLAUSIBLE</strong></div>
     <svg viewBox="0 0 1000 190" preserveAspectRatio="none" role="img" aria-label="Verifier SOC band, downlinked points, and optional revealed truth">
       <line className="chart-axis" x1={LEFT} x2={RIGHT} y1={BOTTOM} y2={BOTTOM} />
       <text className="chart-tick" x="2" y={TOP + 5}>100%</text>
