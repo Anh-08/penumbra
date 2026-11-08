@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -276,6 +277,14 @@ def create_app(provider: Any | None = None) -> FastAPI:
         message = RevealMsg.model_validate(result)
         publish("reveal", message)
         return message
+
+    # Built frontend (deploy/): served from the same origin as /api and /ws, mounted last so it never
+    # shadows them. Off unless PENUMBRA_STATIC_DIR names a directory with index.html.
+    static_dir = os.environ.get("PENUMBRA_STATIC_DIR")
+    if static_dir and (Path(static_dir) / "index.html").is_file():
+        from fastapi.staticfiles import StaticFiles
+
+        app.mount("/", StaticFiles(directory=static_dir, html=True), name="frontend")
 
     return app
 
