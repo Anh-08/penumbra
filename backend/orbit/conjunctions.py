@@ -23,6 +23,7 @@ from contracts import CAM_LEAD_S, Conjunction, ManeuverWindow
 
 MU_KM3_S2 = 398600.4418
 CONJ_THRESHOLD_KM = 1.0          # alert screening distance; re-passes farther out need no manoeuvre
+COARSE_SCREEN_KM = 60.0          # > half the distance covered between two 10 s grid points
 TARGET_MISS_KM = 2.0
 WINDOW_LEADS_S = (4.0 * 3600, 2.5 * 3600, 1.0 * 3600)     # W1 early (cheap), W2, W3 late (expensive)
 WINDOW_LEN_S = 600.0
@@ -128,7 +129,9 @@ def find_conjunctions(model, debris: list[dict] | None = None, sat_ids=None) -> 
         for sat in sat_ids:
             s_pos = _sat_km(model, sat, t)
             dist = np.linalg.norm(s_pos - d_pos, axis=1)
-            for k in np.nonzero(dist < CONJ_THRESHOLD_KM * 4)[0]:
+            # coarse screen: grid points are up to ~76 km apart at ~7.6 km/s relative speed, so look at every
+            # local minimum within COARSE_SCREEN_KM and refine it
+            for k in np.nonzero(dist < COARSE_SCREEN_KM)[0]:
                 if 0 < k < len(t) - 1 and dist[k] <= dist[k - 1] and dist[k] <= dist[k + 1]:
                     fine = np.arange(t[k - 1], t[k + 1], 0.1)
                     fd = np.linalg.norm(_sat_km(model, sat, fine) - propagate(obj["r_km"], obj["v_km_s"], obj["epoch"],

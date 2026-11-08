@@ -30,6 +30,12 @@ def test_planted_debris_is_found_at_the_known_time(model):
     assert all(w.miss_after_km > cj.miss_km for w in cj.windows)
 
 
+def test_off_grid_tca_is_found(model):
+    tca = T0 + 5 * 3600 + 4.7            # between two 10 s grid points
+    cj = C.find_conjunctions(model, [C.plant_debris(model, "SAT-09", tca, 0.4, 60.0, "DEB-04")])
+    assert len(cj) == 1 and abs(cj[0].tca - tca) < 1.0 and abs(cj[0].miss_km - 0.4) < 0.05
+
+
 def test_far_debris_gives_nothing(model):
     deb = C.plant_debris(model, "SAT-09", T0 + 5 * 3600, 3.0, 60.0, "DEB-02")   # outside the 1 km screen
     assert C.find_conjunctions(model, [deb]) == []
