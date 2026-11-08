@@ -12,7 +12,7 @@ import {
 
 const initialTime = Date.now() / 1000;
 const initialFleet = buildFleetState(initialTime);
-const SOC_MIN = null;
+const SOC_MIN = 0.30; // Mirrors backend.verify.constants.SOC_MIN; B1 confirmed on the board at 00:16Z.
 
 async function postJson(path, body) {
   const response = await fetch(path, {
