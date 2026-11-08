@@ -35,6 +35,20 @@ export function glyphScale(satId, focusedId) {
   return satId === focusedId ? FOCUS_SCALE : 1;
 }
 
+// T47: the satellites of the incident on screen (picked in the console, or the recorded run's three) are drawn in the
+// alert amber at full alpha, scaled up and labelled for the whole run, whatever their illumination.
+export const RECORDED_INCIDENT_SATS = ['SAT-12', 'SAT-07', 'SAT-19'];
+
+export function markerStyle(sat, { incident = [], focused = null } = {}) {
+  const inIncident = incident.includes(sat.sat_id);
+  return {
+    tint: inIncident ? 'incident' : tintKey(sat.illum),
+    alpha: inIncident ? 1 : markerAlpha(sat.illum),
+    scale: inIncident || sat.sat_id === focused ? FOCUS_SCALE : 1,
+    label: inIncident || sat.sat_id === focused,
+  };
+}
+
 // Everything the billboard needs for one satellite. The image is the same string for all 24.
 export function glyphStyle(sat, focusedId) {
   return {

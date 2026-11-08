@@ -20,9 +20,9 @@ import {
   VerticalOrigin,
   buildModuleUrl,
 } from 'cesium';
-import { markerAlpha, orbitTrack, STATIONS } from './mockFleet.js';
+import { orbitTrack, STATIONS } from './mockFleet.js';
 import { createPinState, reducePin } from './pinState.js';
-import { glyphScale, glyphStyle, tintKey } from './satGlyph.js';
+import { glyphStyle, markerStyle } from './satGlyph.js';
 import constellations from './data/constellations.json' with { type: 'json' };
 import buffaloPinUrl from './assets/buffalo-pin.svg';
 
@@ -31,7 +31,8 @@ const SHADOW_LENGTH_M = 15_000_000;
 const teal = Color.fromCssColorString('#65e9df');
 const amber = Color.fromCssColorString('#f6ad58');
 const red = Color.fromCssColorString('#f26f75');
-const TINTS = { teal, amber, red };
+const incidentAmber = Color.fromCssColorString('#ffb224');  // --c-alert (T47 incident satellites)
+const TINTS = { teal, amber, red, incident: incidentAmber };
 const INITIAL_FOCUS = 'SAT-07';
 const BUFFALO = { lat: 42.886, lon: -78.878 };
 const CELESTIAL_RADIUS_M = 1_000_000_000;
@@ -87,8 +88,8 @@ function addBuffaloPin(viewer) {
   });
 }
 
-function colorFor(sat) {
-  return TINTS[tintKey(sat.illum)].withAlpha(markerAlpha(sat.illum));
+function colorFor(sat, style = markerStyle(sat)) {
+  return TINTS[style.tint].withAlpha(style.alpha);
 }
 
 function orientationFor(direction) {
@@ -304,6 +305,28 @@ export function createScene(container, initialState, onSelect) {
   };
   viewer.scene.preRender.addEventListener(moveCamera);
 
+  // Marker look: illumination tint, plus the focused satellite and the incident's satellites (T47) scaled up and
+  // labelled; alerted satellites keep their label. The per-frame update only moves and repaints.
+  let lastSats = initialState.sats;
+  let focusedId = INITIAL_FOCUS;
+  let alertedIds = new Set();
+  let incidentIds = [];
+  const styleOf = (sat) => markerStyle(sat, { incident: incidentIds, focused: focusedId });
+  const paint = (marker, sat, style = styleOf(sat)) => {
+    marker.billboard.color = colorFor(sat, style);
+    marker.label.fillColor = TINTS[style.tint].withAlpha(style.tint === 'incident' ? 1 : Math.max(0.4, sat.illum));
+  };
+  const restyle = () => {
+    for (const sat of lastSats) {
+      const marker = markers.get(sat.sat_id);
+      if (!marker) continue;
+      const style = styleOf(sat);
+      marker.billboard.scale = style.scale;
+      marker.label.show = style.label || alertedIds.has(sat.sat_id);
+      paint(marker, sat, style);
+    }
+  };
+
   const update = (state) => {
     viewer.clock.currentTime = JulianDate.fromDate(new Date(state.t * 1000));
     const inertialToFixed = Transforms.computeIcrfToFixedMatrix(viewer.clock.currentTime)
@@ -322,12 +345,12 @@ export function createScene(container, initialState, onSelect) {
       volume.position = center;
       volume.orientation = orientation;
     }
+    lastSats = state.sats;
     for (const sat of state.sats) {
       const marker = markers.get(sat.sat_id);
       if (!marker) continue;
       marker.position = Cartesian3.fromDegrees(sat.lon_deg, sat.lat_deg, sat.alt_km * 1000);
-      marker.billboard.color = colorFor(sat);
-      marker.label.fillColor = colorFor(sat).withAlpha(Math.max(0.4, sat.illum));
+      paint(marker, sat);
     }
     if (state.t - previousTrackTime > 120) {
       previousTrackTime = state.t;
@@ -342,11 +365,13 @@ export function createScene(container, initialState, onSelect) {
     viewer,
     update,
     setHighlights: (focused, alerted) => {
-      const visible = new Set([focused, ...alerted]);
-      for (const [satId, marker] of markers) {
-        marker.label.show = visible.has(satId);
-        marker.billboard.scale = glyphScale(satId, focused);
-      }
+      focusedId = focused;
+      alertedIds = new Set(alerted);
+      restyle();
+    },
+    setIncidentSats: (ids) => {
+      incidentIds = Array.isArray(ids) ? [...ids] : [];
+      restyle();
     },
     setMotionActive: (active) => { motionActive = active; },
     setSkyVisible: (visible) => { skyLines.show = visible; },

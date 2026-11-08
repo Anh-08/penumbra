@@ -12,6 +12,7 @@ import {
 } from './anatomy/anatomyState.js';
 import { createVoicePlayer, loadMuted, saveMuted, shouldSpeak } from './voice.js';
 import { createIncidentState, reduceIncident, requestBody } from './incidentState.js';
+import { RECORDED_INCIDENT_SATS } from './satGlyph.js';
 import {
   createMcState, loadEnabled as loadMcEnabled, reduceMc, saveEnabled as saveMcEnabled,
 } from './montecarlo/mcState.js';
@@ -31,6 +32,7 @@ const MC_TICK_MS = 200;
 
 const initialTime = Date.now() / 1000;
 const initialFleet = buildFleetState(initialTime);
+const NO_SATS = [];  // T47: no incident highlight outside attract unless a run set is frozen
 const SOC_MIN = 0.30; // Mirrors backend.verify.constants.SOC_MIN; B1 confirmed on the board at 00:16Z.
 
 async function postJson(path, body) {
@@ -160,6 +162,13 @@ function App() {
     scene.current?.setHighlights?.(selected, panel.alerts.map((alert) => alert.sat_id));
   }, [selected, panel.alerts]);
 
+  // T47: the incident's satellites stay amber on the globe. In attract they follow the picker; START INCIDENT freezes
+  // the set for the run (the recorded run's three satellites, or the custom pick); back in attract it clears.
+  const [runSats, setRunSats] = useState(null);
+  useEffect(() => { if (panel.phase === 'attract') setRunSats(null); }, [panel.phase]);
+  const incidentSats = runSats ?? (panel.phase === 'attract' ? incident.selected : NO_SATS);
+  useEffect(() => { scene.current?.setIncidentSats?.(incidentSats); }, [incidentSats]);
+
   useEffect(() => {
     scene.current?.setMotionActive?.(['attract', 'storm', 'fastforward'].includes(panel.phase));
   }, [panel.phase]);
@@ -281,22 +290,24 @@ function App() {
     if (!body) return startStorm();
     setPending(true);
     setActionError(null);
+    setRunSats(body.incidents.map((item) => item.sat_id));
     try {
       await postJson('/api/incident', body);
       directed.current = true;
       fastForward.current = null;
-    } catch (error) { setActionError(error.message); }
+    } catch (error) { setActionError(error.message); setRunSats(null); }
     finally { setPending(false); }
   }
 
   async function startStorm() {
     setPending(true);
     setActionError(null);
+    setRunSats(RECORDED_INCIDENT_SATS);
     try {
       await postJson('/api/fault-storm', { live: runLive });
       directed.current = true;
       fastForward.current = null;
-    } catch (error) { setActionError(error.message); }
+    } catch (error) { setActionError(error.message); setRunSats(null); }
     finally { setPending(false); }
   }
 
