@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from contracts import (
@@ -32,6 +32,8 @@ from .messages import validate_message
 from .providers import MockProvider, select_provider
 from .storm import STORM_SEED, StormDirector
 from .voice import Voice, with_audio
+from .voice_command import VoiceCommand, VoiceCommandResponse
+from .voice_command import handle as handle_voice_command
 
 FLEET_INTERVAL_S = 2 / 3  # 1.5 Hz, inside the contracted 1–2 Hz range.
 
@@ -61,9 +63,11 @@ class RevealRequest(BaseModel):
     sat_id: SatId
 
 
-def create_app(provider: Any | None = None, voice: Voice | None = None) -> FastAPI:
+def create_app(provider: Any | None = None, voice: Voice | None = None,
+               voice_command: VoiceCommand | None = None) -> FastAPI:
     app = FastAPI(title="Penumbra API", version="0.1.0")
     app.state.voice = voice if voice is not None else Voice()
+    app.state.voice_command = voice_command if voice_command is not None else VoiceCommand()
     source = provider if provider is not None else select_provider()
     t0 = getattr(source, "t0", datetime.now(timezone.utc).timestamp())
     clock = SimClock(t0=t0)
@@ -193,6 +197,11 @@ def create_app(provider: Any | None = None, voice: Voice | None = None) -> FastA
         source.set_scenario(request.name, request.seed)
         clock.reset(t0)
         return ScenarioResponse(name=request.name, seed=request.seed, t=clock.now(), status="ready")
+
+    @app.post("/api/voice-command", response_model=VoiceCommandResponse)
+    async def voice_command_route(request: Request) -> VoiceCommandResponse:
+        """T43: one push-to-talk clip (multipart field `audio`) -> satellites + fault for the incident picker."""
+        return await handle_voice_command(request, app.state.voice_command)
 
     @app.post("/api/fault-storm", response_model=StormResponse)
     async def fault_storm(request: StormRequest | None = None) -> StormResponse:
