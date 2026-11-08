@@ -134,3 +134,24 @@ Tunable numbers (limits, thresholds, σ values) are not contracts. They live in 
   - `POST /api/clock {speed}`
   - `GET /api/bench` (serves `bench/results/*.json`)
   - `POST /api/reveal`
+
+## Conjunctions and collision-avoidance burns (T31, additive)
+Debris is **simulated** (`data/debris/*.json`, ids `DEB-01`..); orbits, Sun geometry and contacts stay real.
+- `Conjunction{conj_id: "CJ-<n>", sat_id, object_id: "DEB-<nn>", tca, miss_km, windows: [ManeuverWindow]}`, with
+  `ManeuverWindow{window_id: "W1".."W3", t_start, t_end, dv_mps, burn_s, power_w, miss_after_km}`. Every window ends at
+  least `CAM_LEAD_S` (1800 s) before `tca`.
+- Orbit (`backend/orbit`): `conjunctions() -> list[Conjunction]`, offline and deterministic.
+- Command `CAM_BURN {"window_id": "W<n>"}`. The model picks a window; it never writes a Δv (the window carries dv, burn and power).
+  It is listed in `CAM_COMMAND_ARGS`; `COMMAND_ARGS` / `COMMAND_NAMES` (the original five) are unchanged, and
+  `ALL_COMMAND_ARGS` is the union the `Command` model validates.
+- `Plan.kind` gains `"maneuver"`: exactly one `CAM_BURN` plus optional power commands. `CAM_BURN` is allowed in no other kind.
+  The burn's `t_exec` must lie inside its window and before `tca - CAM_LEAD_S`. The model checks the count and the kind;
+  safety checks the window time against `conjunctions()`.
+- `Alert.reason_key` gains `"conjunction"`. Severity comes from the time to TCA: critical < 2 h, warning < 6 h, else watch.
+  `time_to_critical_s` = time to TCA.
+- Agent tool `get_conjunctions(sat_id) -> list[Conjunction]`. It is listed in `AGENT_TOOLS_CAM`; `AGENT_TOOLS` (the original eight) is
+  unchanged, so code built on it keeps working until it adds the new tool. `propose_plan` accepts `CAM_BURN`.
+- Flight rules: a plan containing `CAM_BURN` is **never Tier 1**.
+- Verification: kind `maneuver` is judged from its first command to `tca` plus one orbit.
+- Scenario `conjunction` is added to `DEMO_SCENARIOS`; the other three are unchanged.
+- Narration: `{CJ-<n>.<field>}` placeholders and the ids `CJ-\d+`, `DEB-\d{2}`, `W1`..`W3` are allowed.

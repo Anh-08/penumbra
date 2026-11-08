@@ -13,8 +13,11 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 
 from .constants import (
     ALERT_ID_PATTERN,
+    ALL_COMMAND_ARGS,
     APPROVAL_ID_PATTERN,
-    COMMAND_ARGS,
+    CAM_LEAD_S,
+    CONJ_ID_PATTERN,
+    DEBRIS_ID_PATTERN,
     ESSENTIAL_LOADS,
     FLIGHT_RULE_PATTERN,
     HEATER_SETPOINT_RANGE_C,
@@ -32,13 +35,16 @@ SimId = Annotated[str, StringConstraints(pattern=SIM_ID_PATTERN)]
 ApprovalId = Annotated[str, StringConstraints(pattern=APPROVAL_ID_PATTERN)]
 AlertId = Annotated[str, StringConstraints(pattern=ALERT_ID_PATTERN)]
 FlightRuleId = Annotated[str, StringConstraints(pattern=FLIGHT_RULE_PATTERN)]
+ConjId = Annotated[str, StringConstraints(pattern=CONJ_ID_PATTERN)]
+DebrisId = Annotated[str, StringConstraints(pattern=DEBRIS_ID_PATTERN)]
+WindowId = Literal["W1", "W2", "W3"]
 StationId = Literal["SVALBARD", "TROLL", "FAIRBANKS"]
 Hypothesis = Literal["H0", "H1", "H2", "H3", "H4", "H5"]
 LoadName = Literal["BUS", "COMMS", "ADCS", "PAYLOAD", "HEATER", "AUX"]
 FaultKind = Literal["array_degradation", "stuck_on_load", "capacity_fade", "sensor_bias", "beta_season"]
 Severity = Literal["watch", "warning", "critical"]
-CommandName = Literal["LOAD_OFF", "LOAD_ON", "SET_PAYLOAD_DUTY", "SET_HEATER_SETPOINT", "SAFE_MODE"]
-PlanKind = Literal["plan", "diagnostic"]
+CommandName = Literal["LOAD_OFF", "LOAD_ON", "SET_PAYLOAD_DUTY", "SET_HEATER_SETPOINT", "SAFE_MODE", "CAM_BURN"]
+PlanKind = Literal["plan", "diagnostic", "maneuver"]
 RankStatus = Literal["feasible", "infeasible"]
 TriageStatus = Literal[
     "queued", "working", "auto_executed", "awaiting_approval", "executed", "safe_mode_recommended"
@@ -104,7 +110,7 @@ class Alert(Model):
 
 # ---------- commands and plans ----------
 class Command(Frozen):
-    """Allowlisted command. args keys per command: see constants.COMMAND_ARGS.
+    """Allowlisted command. args keys per command: see constants.ALL_COMMAND_ARGS (COMMAND_ARGS + CAM_COMMAND_ARGS).
 
     LOAD_OFF/LOAD_ON: {"load": <LOAD>}; SET_PAYLOAD_DUTY: {"duty": 0..1};
     SET_HEATER_SETPOINT: {"setpoint_c": -5..20}; SAFE_MODE: {}.
@@ -123,7 +129,7 @@ class Command(Frozen):
 
     @model_validator(mode="after")
     def _check_args(self) -> "Command":
-        expected = set(COMMAND_ARGS[self.name])
+        expected = set(ALL_COMMAND_ARGS[self.name])
         if set(self.args) != expected:
             raise ValueError(f"{self.name} takes args {sorted(expected)}, got {sorted(self.args)}")
         if self.name in ("LOAD_OFF", "LOAD_ON"):
@@ -136,6 +142,9 @@ class Command(Frozen):
             _check_range("duty", self.args["duty"], PAYLOAD_DUTY_RANGE)
         elif self.name == "SET_HEATER_SETPOINT":
             _check_range("setpoint_c", self.args["setpoint_c"], HEATER_SETPOINT_RANGE_C)
+        elif self.name == "CAM_BURN":
+            if self.args["window_id"] not in ("W1", "W2", "W3"):
+                raise ValueError(f"CAM_BURN window_id must be W1..W3, got {self.args['window_id']!r}")
         return self
 
 
@@ -164,6 +173,11 @@ class Plan(Frozen):
         for c in self.commands:
             if c.t_exec < self.uplink.aos:
                 raise ValueError("t_exec must be >= uplink.aos")
+        burns = [c for c in self.commands if c.name == "CAM_BURN"]
+        if self.kind == "maneuver" and len(burns) != 1:
+            raise ValueError("a maneuver plan has exactly one CAM_BURN (plus optional power commands)")
+        if self.kind != "maneuver" and burns:
+            raise ValueError("CAM_BURN only goes in a kind 'maneuver' plan")
         return self
 
     @property
@@ -182,6 +196,46 @@ def plan_hash(plan: Plan) -> str:
     """sha256(canonical_json({sat_id, kind, uplink, commands})), hex digest."""
     body = plan.model_dump(mode="json", include={"sat_id", "kind", "uplink", "commands"})
     return hashlib.sha256(canonical_json(body).encode("utf-8")).hexdigest()
+
+
+# ---------- conjunctions (T31) ----------
+class ManeuverWindow(Frozen):
+    """A backend-offered burn window. The model picks a window_id; it never writes a delta-v."""
+    window_id: WindowId
+    t_start: float
+    t_end: float
+    dv_mps: float = Field(ge=0.0)
+    burn_s: float = Field(gt=0.0)
+    power_w: float = Field(ge=0.0)        # extra bus load during slew + burn + propulsion electronics
+    miss_after_km: float = Field(ge=0.0)
+
+    @model_validator(mode="after")
+    def _order(self) -> "ManeuverWindow":
+        if self.t_end <= self.t_start:
+            raise ValueError("window t_end must be after t_start")
+        return self
+
+
+class Conjunction(Frozen):
+    """A predicted close approach with SIMULATED debris (orbits, Sun and contacts stay real)."""
+    conj_id: ConjId
+    sat_id: SatId
+    object_id: DebrisId
+    tca: float                             # time of closest approach
+    miss_km: float = Field(ge=0.0)
+    windows: list[ManeuverWindow] = Field(min_length=1, max_length=3)
+
+    @model_validator(mode="after")
+    def _windows(self) -> "Conjunction":
+        ids = [w.window_id for w in self.windows]
+        if len(set(ids)) != len(ids):
+            raise ValueError("window ids must be unique")
+        if any(w.t_end > self.tca - CAM_LEAD_S for w in self.windows):
+            raise ValueError("every window ends at least CAM_LEAD_S before tca")
+        return self
+
+    def window(self, window_id: str) -> ManeuverWindow:
+        return next(w for w in self.windows if w.window_id == window_id)
 
 
 # ---------- verification ----------
@@ -390,7 +444,7 @@ class RevealMsg(Model):
 
 # ---------- REST bodies ----------
 class ScenarioRequest(Model):
-    name: Literal["single-stuck-load", "fault-storm", "beta-season"]
+    name: Literal["single-stuck-load", "fault-storm", "beta-season", "conjunction"]
     seed: int
 
 
