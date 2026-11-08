@@ -199,6 +199,17 @@ class OrbitModel:
 
         return orbit_path(self, sat_id, t, minutes)
 
+    def conjunctions(self, debris: list[dict] | None = None):
+        """Close approaches with the SIMULATED debris in data/debris/ (T31); see conjunctions.py."""
+        from .conjunctions import find_conjunctions
+
+        if debris is None and getattr(self, "_conjunctions", None) is not None:
+            return list(self._conjunctions)
+        found = find_conjunctions(self, debris)
+        if debris is None:
+            self._conjunctions = found
+        return list(found)
+
     def sun_direction(self, t: float) -> list[float]:
         """Return the Earth-fixed Sun direction at POSIX time t."""
         from .globe import sun_direction

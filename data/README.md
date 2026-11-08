@@ -135,3 +135,8 @@ panel", never by name.
 
 CelesTrak asks clients to download each URL only once per update, and blocks clients that ignore this. If a refresh is
 ever needed, a human fetches each URL once, by hand. Never retry after a 403.
+
+## Debris (`debris/`, SIMULATED)
+
+`debris/debris.json` holds simulated objects for the T31 conjunction scenario (see `debris/README.md`). They are
+not catalog data; never present them as real.
