@@ -20,20 +20,28 @@ export function clipSeries(times, values, first, last) {
   const end = Math.min(last, times.at(-1));
   if (start > end) return [];
   const valueAt = (t) => {
-    for (let i = 0; i < times.length; i += 1) {
-      if (times[i] === t) return values[i];
-      if (i > 0 && times[i] > t && times[i - 1] < t) {
-        const a = values[i - 1];
-        const b = values[i];
-        if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
-        return a + (b - a) * (t - times[i - 1]) / (times[i] - times[i - 1]);
-      }
+    let low = 0;
+    let high = times.length - 1;
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      if (times[mid] === t) return values[mid];
+      if (times[mid] < t) low = mid + 1;
+      else high = mid - 1;
     }
-    return null;
+    if (low === 0 || low === times.length) return null;
+    const a = values[low - 1];
+    const b = values[low];
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+    return a + (b - a) * (t - times[low - 1]) / (times[low] - times[low - 1]);
   };
-  const points = [start, ...times.filter((t) => t > start && t < end), end];
-  return [...new Set(points)].flatMap((t) => {
-    const value = valueAt(t);
-    return Number.isFinite(value) ? [{ t, value }] : [];
-  });
+  const result = [];
+  const push = (t, value) => {
+    if (Number.isFinite(value) && result.at(-1)?.t !== t) result.push({ t, value });
+  };
+  push(start, valueAt(start));
+  for (let i = 0; i < times.length; i += 1) {
+    if (times[i] > start && times[i] < end) push(times[i], values[i]);
+  }
+  push(end, valueAt(end));
+  return result;
 }
