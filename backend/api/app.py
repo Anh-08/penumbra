@@ -29,6 +29,7 @@ from contracts import (
 from .clock import SimClock
 from .messages import validate_message
 from .providers import MockProvider, select_provider
+from .storm import STORM_SEED, StormDirector
 
 FLEET_INTERVAL_S = 2 / 3  # 1.5 Hz, inside the contracted 1–2 Hz range.
 
@@ -43,6 +44,10 @@ class ScenarioResponse(BaseModel):
 class StormResponse(BaseModel):
     started: bool
     alert_count: int
+
+
+class StormRequest(BaseModel):
+    live: bool = False
 
 
 class ClockResponse(BaseModel):
@@ -64,10 +69,24 @@ def create_app(provider: Any | None = None) -> FastAPI:
     app.state.provider = source
     app.state.clock = clock
     app.state.scenario_task = None
+    app.state.demo_state = 'attract'
+    app.state.run_live = False
 
     def scenario_ready() -> bool:
         task = app.state.scenario_task
         return task is None or (task.done() and task.exception() is None)
+
+    def transition(state: str) -> DemoStateMsg:
+        speed = DEMO_SPEED[state]
+        clock.set_speed(speed)
+        app.state.demo_state = state
+        message = DemoStateMsg(state=state, speed=speed)
+        publish('demo_state', message)
+        return message
+
+    def enter_agent_after_alerts(events: list[dict[str, Any]]) -> None:
+        if app.state.demo_state == 'storm' and any(event['type'] == 'alert' for event in events):
+            transition('agent')
 
     def enqueue(message: dict[str, Any]) -> None:
         for listener in tuple(listeners):
@@ -76,6 +95,9 @@ def create_app(provider: Any | None = None) -> FastAPI:
             listener.put_nowait(message)
 
     async def after_matrix(message: dict[str, Any]) -> None:
+        storm = app.state.storm
+        if storm is not None and storm.status.running:
+            return  # the storm director tickets the satellite on screen itself
         results = message["data"]["results"]
         ticket_for = getattr(source, "operator_ticket", None)
         trajectory_for = getattr(source, "trajectory", None)
@@ -115,6 +137,8 @@ def create_app(provider: Any | None = None) -> FastAPI:
                 loop.call_soon_threadsafe(lambda: loop.create_task(after_matrix(message)))
 
     app.state.publish = publish
+    app.state.storm = (StormDirector(source, publish, transition)
+                       if getattr(source, "supports_storm", False) else None)
 
     @app.websocket("/ws")
     async def websocket_fleet(websocket: WebSocket) -> None:
@@ -132,8 +156,10 @@ def create_app(provider: Any | None = None) -> FastAPI:
                         if state is not None:
                             await websocket.send_json(validate_message("fleet_state", state))
                         if hasattr(source, "drain_messages"):
-                            for event in source.drain_messages():
+                            events = source.drain_messages()
+                            for event in events:
                                 publish(event["type"], event["data"])
+                            enter_agent_after_alerts(events)
                     next_fleet = now + FLEET_INTERVAL_S
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=max(0.0, next_fleet - time.monotonic()))
@@ -149,6 +175,8 @@ def create_app(provider: Any | None = None) -> FastAPI:
 
     @app.post("/api/scenario", response_model=ScenarioResponse)
     async def scenario(request: ScenarioRequest) -> ScenarioResponse:
+        if app.state.storm is not None and app.state.storm.busy:
+            await asyncio.to_thread(app.state.storm.cancel)
         if getattr(source, "background_scenario", False):
             task = app.state.scenario_task
             if task is not None and not task.done():
@@ -162,28 +190,52 @@ def create_app(provider: Any | None = None) -> FastAPI:
         return ScenarioResponse(name=request.name, seed=request.seed, t=clock.now(), status="ready")
 
     @app.post("/api/fault-storm", response_model=StormResponse)
-    async def fault_storm() -> StormResponse:
+    async def fault_storm(request: StormRequest | None = None) -> StormResponse:
         if not scenario_ready():
             raise HTTPException(status_code=503, detail="scenario is not ready")
+        app.state.run_live = request.live if request else False
+        storm = app.state.storm
+        if storm is not None:
+            if storm.busy:
+                raise HTTPException(status_code=409, detail="a fault storm is already running")
+            app.state.scenario_task = asyncio.create_task(
+                asyncio.to_thread(source.start_storm, 'fault-storm', STORM_SEED))
+            await app.state.scenario_task
+            clock.reset(source.t0)
+            storm.start(app.state.run_live)
+            return StormResponse(started=True, alert_count=0)
+        if getattr(source, 'background_scenario', False):
+            app.state.scenario_task = asyncio.create_task(
+                asyncio.to_thread(source.set_scenario, 'fault-storm', 1))
+            await app.state.scenario_task
+            clock.reset(source.t0)
+            transition('storm')
+            return StormResponse(started=True, alert_count=0)
+        source.set_scenario('fault-storm', 1)
+        clock.reset(source.t0)
+        transition('storm')
         alerts = await asyncio.to_thread(source.storm_alerts, clock.now())
         if hasattr(source, "drain_messages"):
             events = source.drain_messages()
             for event in events:
                 publish(event["type"], event["data"])
+            enter_agent_after_alerts(events)
             return StormResponse(started=True, alert_count=sum(event["type"] == "alert" for event in events))
+        events = []
         for alert in alerts:
             publish("alert", alert)
+            events.append({'type': 'alert', 'data': alert})
             if alert.severity in ("warning", "critical"):
                 publish("callout", CalloutMsg(text=f"{alert.sat_id} requires attention", priority=2))
+        enter_agent_after_alerts(events)
         return StormResponse(started=True, alert_count=len(alerts))
 
     @app.post("/api/demo", response_model=DemoStateMsg)
     async def demo(request: DemoRequest) -> DemoStateMsg:
-        speed = DEMO_SPEED[request.state]
-        clock.set_speed(speed)
-        state = DemoStateMsg(state=request.state, speed=speed)
-        publish("demo_state", state)
-        return state
+        storm = app.state.storm
+        if storm is not None and storm.busy:  # the storm director owns the state machine while it runs
+            return DemoStateMsg(state=app.state.demo_state, speed=clock.speed)
+        return transition(request.state)
 
     @app.post("/api/approve", response_model=ApprovalRefused | ExecutionMsg)
     async def approve(request: ApproveRequest) -> ApprovalRefused | ExecutionMsg:
@@ -196,6 +248,8 @@ def create_app(provider: Any | None = None) -> FastAPI:
             ))
         else:
             publish("execution", result)
+            if app.state.storm is not None:
+                app.state.storm.approved(result.sat_id)
         return result
 
     @app.post("/api/clock", response_model=ClockResponse)

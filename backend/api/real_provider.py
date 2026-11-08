@@ -39,16 +39,69 @@ def fleet_state_from_backend(backend: Any, t: float, speed: float) -> FleetState
     })
 
 
+class _Locked:
+    """Backend proxy that takes the provider lock around every method call (the storm runs in a thread)."""
+
+    def __init__(self, backend: Any, lock: RLock) -> None:
+        self._backend, self._lock = backend, lock
+
+    def __getattr__(self, name: str) -> Any:
+        value = getattr(self._backend, name)
+        if not callable(value):
+            return value
+
+        def call(*args: Any, **kwargs: Any) -> Any:
+            with self._lock:
+                return value(*args, **kwargs)
+        return call
+
+
 class RealProvider:
-    """The real fleet stack behind the API's existing provider boundary."""
+    """The real fleet stack behind the API's existing provider boundary.
+
+    During a fault storm (backend/api/storm.py) the storm runner owns sim time: `hold()` freezes it, fleet ticks
+    serve the runner's latest snapshot instead of advancing the world, and approvals go to the dispatcher of the
+    satellite on screen (`activate`).
+    """
 
     background_scenario = True
+    supports_storm = True
 
     def __init__(self, name: str = "single-stuck-load", seed: int = 1):
         self._lock = RLock()
         self.executed: set[str] = set()
         self._pending_messages: list[dict[str, Any]] = []
+        self._held: FleetStateMsg | None = None
+        self.holding = False
         self.set_scenario(name, seed)
+
+    @property
+    def lock(self) -> RLock:
+        return self._lock
+
+    def locked_backend(self) -> Any:
+        return _Locked(self.backend, self._lock)
+
+    def hold(self) -> None:
+        """Freeze sim time for fleet ticks; the storm runner advances the world and calls snapshot()."""
+        with self._lock:
+            self.holding = True
+            self._held = fleet_state_from_backend(self.backend, self.backend.now(), 0.0)
+
+    def snapshot(self) -> None:
+        with self._lock:
+            self._held = fleet_state_from_backend(self.backend, self.backend.now(), 0.0)
+
+    def start_storm(self, name: str, seed: int) -> None:
+        """Build the storm scenario and freeze its clock in one step, so no fleet tick advances the new world."""
+        with self._lock:
+            self.set_scenario(name, seed)
+            self.hold()
+
+    def activate(self, dispatcher: Any) -> None:
+        """Route operator tickets and approvals to this satellite's dispatcher."""
+        with self._lock:
+            self.dispatcher = dispatcher
 
     def set_scenario(self, name: str, seed: int) -> None:
         from backend.agent.dispatcher import Dispatcher
@@ -66,9 +119,16 @@ class RealProvider:
             self.t0 = float(scenario.env.t[0])
             self.executed.clear()
             self._pending_messages.clear()
+            self.holding = False
+            self._held = None
 
     def fleet_state(self, t: float, speed: float) -> FleetStateMsg:
+        held = self._held
+        if self.holding and held is not None:  # the storm runner owns time and the detector's messages
+            return held.model_copy(update={"speed": speed})
         with self._lock:
+            if self.holding and self._held is not None:  # hold() may have won the lock while we waited
+                return self._held.model_copy(update={"speed": speed})
             state = fleet_state_from_backend(self.backend, t, speed)
             self._pending_messages.extend(self.backend.detector.drain_messages())
             return state

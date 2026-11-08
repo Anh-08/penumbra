@@ -116,14 +116,22 @@ export function TopBar({ phase, mode, time, speed, hasVerification }) {
 }
 
 export function DirectorSlot({ phase, approval, result, refusal, execution, pending, error,
-  onApprove, onReveal }) {
+  runLive, onToggleRunLive, onStartStorm, onApprove, onReveal }) {
   const executed = execution?.plan_id === approval?.plan_id;
   const canReveal = phase === 'reveal' && executed;
   const failed = result?.passes_all === false;
   const currentHash = approval?.plan_hash === result?.plan_hash;
   return <section className="hud-panel director-slot" aria-label="Flight Director">
     <PanelHeading source="HUMAN">FLIGHT DIRECTOR</PanelHeading>
-    {canReveal ? <button className="director-action reveal" onClick={onReveal} disabled={pending}>
+    {phase === 'attract' ? <>
+      <button className="director-action storm" onClick={onStartStorm} disabled={pending}>
+        {pending ? 'STARTING…' : 'FAULT STORM'}
+      </button>
+      <label className="run-live-switch">
+        <input type="checkbox" checked={runLive} onChange={onToggleRunLive} disabled={pending} />
+        Run live with Gemini next run
+      </label>
+    </> : canReveal ? <button className="director-action reveal" onClick={onReveal} disabled={pending}>
       {pending ? 'REVEALING…' : 'REVEAL TRUTH'}
     </button> : executed ? <div className="director-executed">EXECUTED · {execution.plan_id}
       {phase === 'fastforward' && <small>Following the next eclipse at 600×</small>}

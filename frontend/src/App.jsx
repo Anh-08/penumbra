@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { buildFleetState } from './mockFleet.js';
 import { createScene } from './scene.js';
+import { connectFleetSocket } from './fleetSocket.js';
 import { createPanelState, reducePanel } from './panelState.js';
 import { createMatrixState, reduceMatrix, scheduleConflicts, worstPlausibleHypothesis } from './matrixState.js';
 import { advanceEclipse, approvalPayload, createFlightState, reduceFlight } from './flightState.js';
@@ -29,6 +30,9 @@ function App() {
   const hasApiFleet = useRef(false);
   const firstAlertSeen = useRef(false);
   const fastForward = useRef(null);
+  // A FAULT STORM run is directed by the API (backend/api/storm.py): it sends every demo_state, including
+  // fastforward and reveal, so the page must not drive those transitions itself.
+  const directed = useRef(false);
   const [fleet, setFleet] = useState(initialFleet);
   const [selected, setSelected] = useState('SAT-07');
   const [panel, dispatch] = useReducer(reducePanel, undefined, createPanelState);
@@ -40,6 +44,8 @@ function App() {
   const [actionError, setActionError] = useState(null);
   const [localPreview, setLocalPreview] = useState(true);
   const [sceneError, setSceneError] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [runLive, setRunLive] = useState(false);
 
   useEffect(() => {
     const wallStart = performance.now();
@@ -63,17 +69,14 @@ function App() {
     }, 100);
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    let socket;
-    try {
-      socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
-      socket.onmessage = (event) => {
+    const stopSocket = connectFleetSocket(`${protocol}//${window.location.host}/ws`, (event) => {
         let message;
         try { message = JSON.parse(event.data); } catch { return; }
         if (!message?.type || !message?.data) return;
         dispatchMatrix(message);
         dispatchFlight(message);
         if (message.type === 'fleet_state') {
-          const flightStep = fastForward.current;
+          const flightStep = directed.current ? null : fastForward.current;
           const sat = flightStep && message.data.sats.find((item) => item.sat_id === flightStep.satId);
           if (sat) {
             const next = advanceEclipse(flightStep, sat.illum);
@@ -84,6 +87,7 @@ function App() {
           }
           hasApiFleet.current = true;
           setLocalPreview(false);
+          setReconnecting(false);
           scene.current?.update(message.data);
           setFleet(message.data);
           dispatch(message);
@@ -101,18 +105,11 @@ function App() {
           setSelected(message.data.sat_id);
         }
         dispatch(message);
-      };
-      socket.onclose = () => {
-        hasApiFleet.current = false;
-        setLocalPreview(true);
-      };
-    } catch {
-      hasApiFleet.current = false;
-    }
+      }, () => setReconnecting(true));
 
     return () => {
       window.clearInterval(timer);
-      socket?.close();
+      stopSocket();
       scene.current?.destroy();
       scene.current = null;
     };
@@ -128,7 +125,7 @@ function App() {
 
   useEffect(() => {
     const executionApproval = flight.approvals[flight.execution?.plan_id];
-    if (!executionApproval
+    if (!executionApproval || directed.current
       || panel.phase !== 'approval' || fastForward.current) return;
     fastForward.current = { satId: executionApproval.sat_id, entered: false, stopping: false };
     postJson('/api/demo', { state: 'fastforward' })
@@ -161,6 +158,17 @@ function App() {
     finally { setPending(false); }
   }
 
+  async function startStorm() {
+    setPending(true);
+    setActionError(null);
+    try {
+      await postJson('/api/fault-storm', { live: runLive });
+      directed.current = true;
+      fastForward.current = null;
+    } catch (error) { setActionError(error.message); }
+    finally { setPending(false); }
+  }
+
   const activeMatrix = matrix.bySat[selected];
   const matrixOpen = Boolean(activeMatrix?.results.length);
   const flightOpen = panel.phase === 'fastforward' || panel.phase === 'reveal';
@@ -175,7 +183,7 @@ function App() {
   const daylight = fleet.sats.filter((sat) => sat.illum >= 0.95).length;
   const penumbra = fleet.sats.filter((sat) => sat.illum > 0.05 && sat.illum < 0.95).length;
   const eclipse = fleet.sats.length - daylight - penumbra;
-  const mode = localPreview ? 'SIMULATED PREVIEW' : 'API FEED';
+  const mode = runLive ? 'LIVE · GEMINI' : 'PACED REPLAY';
 
   return <div className={`mission-shell ${showPanels ? 'panels-visible' : 'attract-view'}`}>
     <div className="globe-stage" aria-label="Satellite fleet globe">
@@ -186,6 +194,7 @@ function App() {
 
     <TopBar phase={panel.phase} mode={mode} time={fleet.t} speed={fleet.speed}
       hasVerification={matrixOpen || panel.trace.some((row) => row.tool === 'simulate')} />
+    {reconnecting && hasApiFleet.current && <div className="reconnect-badge" role="status">RECONNECTING · showing last state</div>}
 
     {!showPanels && <>
       <div className="poster-line">Every satellite in that shadow<br />is running on battery.</div>
@@ -221,7 +230,8 @@ function App() {
     <ProvenanceLegend localPreview={localPreview} />
     <DirectorSlot phase={panel.phase} approval={activeApproval} result={activeResult}
       refusal={activeRefusal} execution={flight.execution} pending={pending} error={actionError}
-      onApprove={approveSelected} onReveal={revealTruth} />
+      runLive={runLive} onToggleRunLive={() => setRunLive((value) => !value)}
+      onStartStorm={startStorm} onApprove={approveSelected} onReveal={revealTruth} />
   </div>;
 }
 
