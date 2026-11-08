@@ -161,3 +161,22 @@ def test_gemini_final_turn_keeps_declarations_but_forbids_calls(monkeypatch):
     config = m._client.models.requests[1]["config"]
     assert config.tools and len(config.tools[0].function_declarations) == len(TOOL_SCHEMAS)
     assert config.tool_config.function_calling_config.mode.value == "NONE"
+
+
+# (3) units: B1's live conjunction run rendered "0.30 km km" -----------------------------------------------------
+def test_a_unit_written_after_a_placeholder_is_not_doubled():
+    from backend.agent.tests.test_cam_safety import ConjBackend
+
+    d = Dispatcher(ConjBackend())
+    d.dispatch("get_conjunctions", {"sat_id": MOCK_SAT})
+    d.dispatch("propose_plan", {"sat_id": MOCK_SAT, "commands": SHED})  # P-1
+    d.dispatch("simulate", {"plan_id": "P-1"})  # S-1
+    assert render("miss {CJ-1.miss_km} km", d) == "miss 0.30 km"
+    assert render("miss {CJ-1.miss_km}km.", d) == "miss 0.30 km."
+    assert render("miss {CJ-1.miss_km}, so", d) == "miss 0.30 km, so"
+    margin = render("{S-1.worst_margin_soc}", d)
+    assert margin.endswith("% SOC")
+    assert render("margin {S-1.worst_margin_soc} SOC left", d) == f"margin {margin} left"
+    assert render("margin {S-1.worst_margin_soc} % SOC left", d) == f"margin {margin} left"
+    assert render("at {CJ-1.tca} UTC sharp", d).endswith(" UTC sharp") and "UTC UTC" not in render("at {CJ-1.tca} UTC", d)
+    assert render("{CJ-1.object_id} s", d) == "DEB-01 s"  # no digit unit in the value: nothing to drop
