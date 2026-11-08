@@ -13,14 +13,14 @@ Penumbra is mission ops for that moment. A Gemini agent reads the fleet and prop
 <p align="center"><img src="docs/media/approve-flow.gif" alt="SAT-07: the plan-by-hypothesis matrix shows plan P-1 passing every cause; the operator approves and the plan executes." width="88%"></p>
 
 ## Try it
-Open [bullsinorbit.study](https://bullsinorbit.study/) and press **FAULT STORM**. Three satellites start failing. SAT-12 is fixed under a pre-approved flight rule, SAT-07 waits for your approval, and SAT-19 has no plan that survives every cause. Then the clock skips through the eclipse and the app reveals the fault it injected. The public demo replays a recorded live Gemini run at a fixed pace, so every visitor sees the same thing.
+Open [bullsinorbit.study](https://bullsinorbit.study/) and press **START INCIDENT** to replay the recorded fault storm. Three satellites start failing. SAT-12 is fixed under a pre-approved flight rule, SAT-07 waits for your approval, and SAT-19 has no plan that survives every cause. Then the clock skips through the eclipse and the app reveals the fault it injected. The public demo replays a recorded live Gemini run at a fixed pace, so every visitor sees the same thing.
 
 ## Voice command
 Hold **Ctrl+Alt** (or the mic button), say the incident, and let go. Gemini transcribes the clip and returns the satellites and the fault, and the incident picker fills itself in. Nothing starts until you press START INCIDENT.
 
-<p align="center"><img src="docs/media/voice-command.gif" alt="Holding Ctrl+Alt, the operator says 'Solar array degradation on satellites three and twelve'; Gemini's transcript appears and the picker selects satellites 03 and 12 and the solar array fault." width="88%"></p>
+https://github.com/user-attachments/assets/7934e00f-8f2a-4017-a9eb-283103bf1937
 
-Recorded with a live Gemini call on a local server; the wait for Gemini's reply is trimmed in the clip. Custom incidents and voice commands need a Gemini key on the server.
+The clip (26 s, with sound) was recorded with a live Gemini call on a local server; the wait for Gemini's reply is trimmed. The public demo has a Gemini key, so you can try voice commands and custom incidents there; the browser will ask for the microphone.
 
 ## How it works
 <p align="center"><img src="docs/media/how-it-works.svg" alt="Loop: simulated power telemetry from satellites on real orbits reaches the ground during a pass; detection and triage; a Gemini agent with a safety layer; a Monte Carlo verifier; a flight rule or a human approves the exact plan hash, or physics vetoes it; an uplink scheduler sends the command in a contact window." width="100%"></p>
@@ -44,9 +44,18 @@ No real satellite's telemetry appears anywhere. The UI always shows a Real / Sim
 - Diagnosis (B2, n = 40 seeded simulated cases): the scorer ranks the true cause first in 36 of 40 cases with peer and diagnostic evidence, and in 31 of 40 with neither. [`bench/results/b2.json`](bench/results/b2.json)
 - Scale (B4): checking 24 satellites × 6 hypotheses × 3 plans × 20 Monte Carlo draws over 3 hours takes 49 ms on a 22-CPU laptop and 227 ms on a 2-vCPU Vultr instance. The same check for 10,000 satellites takes 29 s and 84 s. Scheduling 200 uplinks with CP-SAT (optimal) takes 0.28 s and 1.5 s. [`b4.json`](bench/results/b4.json), [`b4_vultr.json`](bench/results/b4_vultr.json)
 
-| Agent trace and triage | Satellite anatomy and power path |
-|---|---|
-| <img src="docs/media/03a-trace.jpg" alt="Triage queue with SAT-12, hypothesis bars and the agent's tool-call trace."> | <img src="docs/media/11-anatomy.jpg" alt="Satellite anatomy view listing each component, its power role and whether it is essential."> |
+<table>
+<tr>
+<td width="50%" valign="top"><img src="docs/media/03a-trace.jpg" alt="Triage queue with SAT-12, hypothesis bars and the agent's tool-call trace."><br><sub><b>Agent trace and triage.</b> Alerts, scored hypotheses and every tool call the agent made.</sub></td>
+<td width="50%" valign="top"><img src="docs/media/11-anatomy.jpg" alt="Satellite anatomy view listing each component, its power role and whether it is essential."><br><sub><b>Satellite anatomy.</b> Each part's power role, and which loads are essential.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/media/mc-grid-3d.gif" alt="Monte Carlo view in 3D: twenty small satellites, one per sampled run of the plan under check, while physics verifies it."><br><sub><b>Monte Carlo view, 3D.</b> Twenty sampled runs of the plan under check while physics verifies it.</sub></td>
+<td width="50%" valign="top"><img src="docs/media/mc-grid-2d.gif" alt="Monte Carlo view in 2D: the same twenty sampled runs as flat tiles with their battery gauges."><br><sub><b>Monte Carlo view, 2D.</b> The same twenty runs as flat tiles with battery gauges.</sub></td>
+</tr>
+</table>
+
+<sub>The Monte Carlo view animates the verifier's sampled outcomes and is labelled illustrative in the app.</sub>
 
 ## Built with
 - **Gemini:** the agent runs on function calling, and a push-to-talk clip (hold Ctrl+Alt) becomes a transcript, satellites and a fault.
