@@ -31,6 +31,7 @@ from .clock import SimClock
 from .messages import validate_message
 from .providers import MockProvider, select_provider
 from .storm import STORM_SEED, StormDirector
+from .voice import Voice, with_audio
 
 FLEET_INTERVAL_S = 2 / 3  # 1.5 Hz, inside the contracted 1–2 Hz range.
 
@@ -60,8 +61,9 @@ class RevealRequest(BaseModel):
     sat_id: SatId
 
 
-def create_app(provider: Any | None = None) -> FastAPI:
+def create_app(provider: Any | None = None, voice: Voice | None = None) -> FastAPI:
     app = FastAPI(title="Penumbra API", version="0.1.0")
+    app.state.voice = voice if voice is not None else Voice()
     source = provider if provider is not None else select_provider()
     t0 = getattr(source, "t0", datetime.now(timezone.utc).timestamp())
     clock = SimClock(t0=t0)
@@ -121,6 +123,8 @@ def create_app(provider: Any | None = None) -> FastAPI:
             publish("trajectory", trajectory)
 
     def publish(kind: str, payload: Any) -> None:
+        if kind == "callout":  # spoken when its clip is cached; always captioned
+            payload = with_audio(payload, app.state.voice)
         message = validate_message(kind, payload)
         loop = app.state.loop
         try:

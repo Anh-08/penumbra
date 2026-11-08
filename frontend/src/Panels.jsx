@@ -102,7 +102,7 @@ export function ProvenanceLegend({ localPreview }) {
   </section>;
 }
 
-export function TopBar({ phase, mode, time, speed, hasVerification }) {
+export function TopBar({ phase, mode, time, speed, hasVerification, muted, onToggleVoice }) {
   const activeStage = phase === 'approval' || phase === 'fastforward' || phase === 'reveal'
     ? 2 : hasVerification ? 1 : 0;
   const complete = phase === 'fastforward' || phase === 'reveal';
@@ -111,7 +111,9 @@ export function TopBar({ phase, mode, time, speed, hasVerification }) {
     <div className="stage-stepper" aria-label="AI proposes, physics verifies, humans approve">
       {['AI PROPOSES', 'PHYSICS VERIFIES', 'HUMAN APPROVES'].map((label, index) => <div className={`stage ${complete ? 'done' : activeStage === index ? 'active' : ''}`} key={label}>{label}</div>)}
     </div>
-    <div className="top-status"><span className="mode-chip">{mode}</span><time className="num">{timeLabel(time)} UTC</time><span className="speed-chip num">{speed === 0 ? 'PAUSED' : `${speed}×`}</span></div>
+    <div className="top-status"><span className="mode-chip">{mode}</span>
+      {onToggleVoice && <button type="button" className="voice-chip" aria-pressed={!muted}
+        title="Voice callouts (captions always show)" onClick={onToggleVoice}>{muted ? 'VOICE OFF' : 'VOICE ON'}</button>}<time className="num">{timeLabel(time)} UTC</time><span className="speed-chip num">{speed === 0 ? 'PAUSED' : `${speed}×`}</span></div>
   </header>;
 }
 
