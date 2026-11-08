@@ -76,3 +76,31 @@ def test_unknown_or_unsimulated_plans_have_no_ticket():
     with pytest.raises(SafetyError) as exc:
         d.operator_ticket(pid)
     assert exc.value.reason_key == "not_verified"
+
+
+def test_tickets_coexist_until_one_recovery_plan_is_approved():
+    d = Dispatcher(MockBackend())
+    red, green, other = simulated(d, AUX_OFF), simulated(d, SHED), simulated(d, SHED)
+    for pid in (green, other):
+        d.dispatch("schedule_uplink", {"plan_id": pid})
+    tickets = {pid: d.operator_ticket(pid) for pid in (red, green, other)}
+    assert len({t.approval_id for t in tickets.values()}) == 3  # one per plan, all open at once
+    assert d.approve(tickets[green].approval_id, tickets[green].plan_hash).plan_id == green
+    second = d.approve(tickets[other].approval_id, tickets[other].plan_hash)
+    assert isinstance(second, c.ApprovalRefused) and second.reason_key == "superseded"
+    veto = d.approve(tickets[red].approval_id, tickets[red].plan_hash)
+    assert veto.reason_key == "failed_verification" and veto.failing_hypotheses == ["H2"]  # red still shows why
+
+
+def test_an_executed_diagnostic_does_not_supersede_the_recovery_plan():
+    from backend.agent.stub import DIAGNOSTIC
+    d = Dispatcher(MockBackend())
+    diag = d.dispatch("propose_diagnostic_test", {"sat_id": MOCK_SAT, "commands": DIAGNOSTIC}).result["plan_id"]
+    d.dispatch("simulate", {"plan_id": diag})
+    d.dispatch("schedule_uplink", {"plan_id": diag})
+    assert d.dispatch("request_approval", {"plan_id": diag}).result["status"] == "auto_executed"
+    d.dispatch("score_hypotheses", {"sat_id": MOCK_SAT})
+    pid = simulated(d, SHED)
+    d.dispatch("schedule_uplink", {"plan_id": pid})
+    ticket = d.operator_ticket(pid)
+    assert d.approve(ticket.approval_id, ticket.plan_hash).plan_id == pid
