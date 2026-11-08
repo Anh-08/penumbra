@@ -22,7 +22,8 @@ import numpy as np
 from contracts import CAM_LEAD_S, Conjunction, ManeuverWindow
 
 MU_KM3_S2 = 398600.4418
-CONJ_THRESHOLD_KM = 5.0
+CONJ_THRESHOLD_KM = 1.0          # alert screening distance; re-passes farther out need no manoeuvre
+COARSE_SCREEN_KM = 60.0          # > half the distance covered between two 10 s grid points
 TARGET_MISS_KM = 2.0
 WINDOW_LEADS_S = (4.0 * 3600, 2.5 * 3600, 1.0 * 3600)     # W1 early (cheap), W2, W3 late (expensive)
 WINDOW_LEN_S = 600.0
@@ -39,8 +40,14 @@ def _accel(r):
 
 def propagate(r0, v0, t0: float, times: np.ndarray, step_s: float = 10.0) -> np.ndarray:
     """Two-body positions (km) at `times`, from the state (r0, v0) at t0. RK4 with a fixed step."""
+    return propagate_states(r0, v0, t0, times, step_s)[0]
+
+
+def propagate_states(r0, v0, t0: float, times: np.ndarray, step_s: float = 10.0) -> tuple[np.ndarray, np.ndarray]:
+    """Two-body (positions km, velocities km/s) at `times`, from the state (r0, v0) at t0. RK4, fixed step."""
     times = np.asarray(times, float)
     out = np.empty((len(times), 3))
+    vout = np.empty((len(times), 3))
     for sign in (1.0, -1.0):
         sel = (times >= t0) if sign > 0 else (times < t0)
         if not sel.any():
@@ -58,11 +65,11 @@ def propagate(r0, v0, t0: float, times: np.ndarray, step_s: float = 10.0) -> np.
                 r = r + h / 6.0 * (k1r + 2 * k2r + 2 * k3r + k4r)
                 v = v + h / 6.0 * (k1v + 2 * k2v + 2 * k3v + k4v)
                 t += h
-            pos[tt] = r.copy()
+            pos[tt] = (r.copy(), v.copy())
         idx = np.nonzero(sel)[0]
         for i in idx:
-            out[i] = pos[times[i]]
-    return out
+            out[i], vout[i] = pos[times[i]]
+    return out, vout
 
 
 def load_debris(path: str | Path = DEFAULT_DEBRIS) -> list[dict]:
@@ -99,9 +106,10 @@ def plant_debris(model, sat_id: str, tca: float, miss_km: float, crossing_deg: f
             "simulated": True, "note": f"planted to pass {sat_id} (crossing {crossing_deg} deg)"}
 
 
-def windows_for(tca: float, miss_km: float, t_min: float) -> list[ManeuverWindow]:
+def windows_for(tca: float, miss_km: float, t_min: float, leads_s=None) -> list[ManeuverWindow]:
+    """Windows ending `leads_s` (default WINDOW_LEADS_S) before TCA; a debris record may set its own leads."""
     out = []
-    for wid, lead in zip(("W1", "W2", "W3"), WINDOW_LEADS_S):
+    for wid, lead in zip(("W1", "W2", "W3"), leads_s or WINDOW_LEADS_S):
         t_end = tca - lead
         t_start = t_end - WINDOW_LEN_S
         if t_start < t_min or t_end > tca - CAM_LEAD_S:
@@ -123,22 +131,25 @@ def find_conjunctions(model, debris: list[dict] | None = None, sat_ids=None) -> 
     sat_ids = list(sat_ids or model.assets.satellites)
     found = []
     for obj in debris:
-        d_pos = propagate(obj["r_km"], obj["v_km_s"], obj["epoch"], t)
+        d_pos, d_vel = propagate_states(obj["r_km"], obj["v_km_s"], obj["epoch"], t)
         for sat in sat_ids:
             s_pos = _sat_km(model, sat, t)
             dist = np.linalg.norm(s_pos - d_pos, axis=1)
-            for k in np.nonzero(dist < CONJ_THRESHOLD_KM * 4)[0]:
+            # coarse screen: grid points are up to ~76 km apart at ~7.6 km/s relative speed, so look at every
+            # local minimum within COARSE_SCREEN_KM and refine it
+            for k in np.nonzero(dist < COARSE_SCREEN_KM)[0]:
                 if 0 < k < len(t) - 1 and dist[k] <= dist[k - 1] and dist[k] <= dist[k + 1]:
                     fine = np.arange(t[k - 1], t[k + 1], 0.1)
-                    fd = np.linalg.norm(_sat_km(model, sat, fine) - propagate(obj["r_km"], obj["v_km_s"], obj["epoch"],
-                                                                             fine, step_s=1.0), axis=1)
+                    # refine from the grid state just before, so the fine search integrates 20 s, not hours
+                    fd = np.linalg.norm(_sat_km(model, sat, fine) - propagate(d_pos[k - 1], d_vel[k - 1], t[k - 1],
+                                                                             fine, step_s=0.5), axis=1)
                     j = int(np.argmin(fd))
                     if fd[j] <= CONJ_THRESHOLD_KM:
-                        found.append((float(fine[j]), sat, obj["object_id"], float(fd[j])))
-    found.sort()
+                        found.append((float(fine[j]), sat, obj["object_id"], float(fd[j]), obj.get("window_leads_s")))
+    found.sort(key=lambda x: x[:4])
     out = []
-    for i, (tca, sat, oid, miss) in enumerate(found, 1):
-        wins = windows_for(tca, miss, float(t[0]))
+    for i, (tca, sat, oid, miss, leads) in enumerate(found, 1):
+        wins = windows_for(tca, miss, float(t[0]), leads)
         if wins:
             out.append(Conjunction(conj_id=f"CJ-{i}", sat_id=sat, object_id=oid, tca=round(tca, 1),
                                    miss_km=round(miss, 3), windows=wins))
