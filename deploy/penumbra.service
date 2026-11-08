@@ -1,0 +1,15 @@
+[Unit]
+Description=Penumbra public replay demo (docker)
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Restart=always
+RestartSec=5
+ExecStartPre=-/usr/bin/docker rm -f penumbra
+# Port 80 on the host -> 8000 in the container. No secrets are passed: replay mode only.
+ExecStart=/usr/bin/docker run --name penumbra --rm -p 80:8000 --memory=3g penumbra
+ExecStop=/usr/bin/docker stop penumbra
+
+[Install]
+WantedBy=multi-user.target

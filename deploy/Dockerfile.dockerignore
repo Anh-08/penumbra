@@ -1,0 +1,17 @@
+# Build context is the repo root; keep the image small and free of anything secret.
+.git
+**/.env
+**/*.env
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+frontend/dist
+runs/*
+!runs/demo
+penumbra-kit.zip
+data/pcoe
+data/birds
+bench/*
+!bench/results
+tests
+docs
