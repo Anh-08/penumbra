@@ -2,7 +2,7 @@
 <!-- CLAUDE.md and AGENTS.md must stay identical. Only B1 edits them, after A and B agree. -->
 
 Penumbra is verified AI mission ops for a 24-satellite LEO fleet. **AI proposes, physics verifies, humans approve.**
-Event: UB Hacking 2026, hacking starts Sat 13:00. All times are US Eastern. Feature freeze **Sun 06:00**. Submit **Sun 12:00** (hard deadline 12:30).
+Event: UB Hacking 2026, hacking starts Sat 13:00. All times are US Eastern. Feature freeze **Sun 09:30**. Submit **Sun 12:00** (hard deadline 12:30).
 Scope is fixed by ISSUES.md. Do not build anything that is not in an approved issue.
 
 ## 1. Sessions and ownership
@@ -31,7 +31,7 @@ Unit tests live next to the code you own (e.g. `backend/eps/tests/`). `tests/` i
 - Time is UTC and timezone-aware; arrays use POSIX seconds. SI units unless the field name says otherwise (`_deg`, `_c`, `_wh`, `_ms`).
 - Satellites are always `SAT-01`..`SAT-24`. Never show real operator or satellite names.
 - Data transparency (Radial track rule): the UI always shows a "Real / Simulated" legend, and every results file states which inputs are real and which are simulated.
-- After the feature freeze (Sun 06:00), only PRs labeled `fix`.
+- After the feature freeze (Sun 09:30, moved from 06:00 by human B on Sun 02:25), only PRs labeled `fix`.
 
 ## 3. Task loop
 1. Run `scripts/board.sh <CODE> --once` and act on new messages addressed to you.
