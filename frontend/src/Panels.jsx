@@ -113,9 +113,30 @@ export function TopBar({ phase, mode, time, speed, hasVerification }) {
   </header>;
 }
 
-export function DirectorSlot() {
+export function DirectorSlot({ phase, approval, result, refusal, execution, pending, error,
+  onApprove, onReveal }) {
+  const executed = execution?.plan_id === approval?.plan_id;
+  const canReveal = phase === 'reveal' && executed;
+  const failed = result?.passes_all === false;
   return <section className="hud-panel director-slot" aria-label="Flight Director">
     <PanelHeading source="HUMAN">FLIGHT DIRECTOR</PanelHeading>
-    <div className="director-wait">Waiting for a verified plan</div>
+    {canReveal ? <button className="director-action reveal" onClick={onReveal} disabled={pending}>
+      {pending ? 'REVEALING…' : 'REVEAL TRUTH'}
+    </button> : executed ? <div className="director-executed">EXECUTED · {execution.plan_id}
+      {phase === 'fastforward' && <small>Following the next eclipse at 600×</small>}
+    </div> : approval && result ? <>
+      <div className="director-tier">TIER {approval.tier} · {approval.tier === 2 ? 'HUMAN REQUIRED' : 'FLIGHT RULE'}</div>
+      <button className={`director-action ${failed ? 'failed' : 'verified'}`}
+        onClick={onApprove} disabled={pending}>
+        <span>{pending ? 'CHECKING…' : `APPROVE ${result.plan_id}`}</span>
+        {failed && <small>FAILED VERIFICATION · PHYSICS WILL VETO</small>}
+      </button>
+      <div className="director-hash num">hash {result.plan_hash?.slice(0, 8) ?? '—'} · {approval.approval_id}</div>
+    </> : <div className="director-wait">Waiting for a verified plan</div>}
+    {refusal && <div className="director-refusal" role="alert">
+      <strong>REFUSED · PHYSICS VETO</strong>
+      <span>{refusal.reason_key.replaceAll('_', ' ')} · {refusal.failing_hypotheses.join(', ') || 'NO OVERRIDE'}</span>
+    </div>}
+    {error && <div className="director-error" role="alert">{error}</div>}
   </section>;
 }

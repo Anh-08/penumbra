@@ -16,12 +16,13 @@
 .matrix-cell { min-width: 0; display: grid; grid-template-columns: 1fr auto; grid-template-rows: 1fr 1fr; align-items: center; gap: 0 3px; padding: 2px 5px; border: 1px solid var(--c-line-strong); border-radius: var(--r-1); background: var(--c-raise); color: var(--c-ink-2); font: 600 var(--fs-label) var(--font-cond); }
 .matrix-cell strong { grid-row: 1 / span 2; font-weight: 600; }.matrix-cell span, .matrix-cell small { text-align: right; white-space: nowrap; font: 500 var(--fs-label) var(--font-data); }
 .matrix-cell.passed { border-color: var(--c-verified); background: var(--c-verified-14); color: var(--c-verified); }.matrix-cell.failed { border-color: var(--c-refused); background: var(--c-refused-14); color: var(--c-refused); }
-.matrix-cell.ruled-out { opacity: .3; background-image: var(--hatch); }.matrix-cell.pending { place-items: center; color: var(--c-ink-3); }
+.matrix-cell.ruled-out { opacity: .3; background-image: var(--hatch); }.matrix-cell.pending { place-items: center; color: var(--c-ink-3); }.matrix-cell.refused { opacity: 1; border: 2px solid var(--c-refused); color: var(--c-refused); }
 .matrix-cell.arriving { animation: matrix-arrive var(--dur-2) var(--ease-out) both, matrix-pulse 500ms var(--ease-out) both; animation-delay: calc(var(--cell-index) * 70ms); }
 @keyframes matrix-arrive { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
 @keyframes matrix-pulse { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 0 4px currentColor; } }
 .matrix-footer { display: flex; justify-content: space-between; color: var(--c-ink-3); font: 600 var(--fs-label) var(--font-cond); letter-spacing: var(--track-label); min-height: 20px; }
-.matrix-lower { flex: 1; min-height: 0; border-top: 1px solid var(--c-line-strong); padding-top: var(--sp-2); }
+.matrix-lower { flex: 1; min-height: 0; border-top: 1px solid var(--c-line-strong); padding-top: var(--sp-2); display: flex; flex-direction: column; overflow-y: auto; }
+.matrix-lower .soc-chart { flex: 1; min-height: 100px; }
 .trajectory-reserved { height: 100%; display: flex; align-items: center; justify-content: space-between; color: var(--c-ink-3); font: 500 var(--fs-label) var(--font-cond); }.trajectory-reserved span:first-child { color: var(--c-ink-2); font-weight: 600; letter-spacing: var(--track-label); }
 .schedule-conflict { display: flex; flex-direction: column; gap: var(--sp-2); color: var(--c-ink); }.schedule-title { display: flex; justify-content: space-between; align-items: center; color: var(--c-alert); font: 600 var(--fs-label) var(--font-cond); letter-spacing: .04em; }.schedule-lines { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); font: 500 var(--fs-label) var(--font-cond); }.schedule-lines b { color: var(--c-ink); font-weight: 600; }.schedule-lines .station-conflict { display: block; width: 100%; white-space: normal; }.schedule-lines .unscheduled { color: var(--c-alert); }
 
