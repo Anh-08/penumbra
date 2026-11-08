@@ -22,7 +22,7 @@ import numpy as np
 from contracts import CAM_LEAD_S, Conjunction, ManeuverWindow
 
 MU_KM3_S2 = 398600.4418
-CONJ_THRESHOLD_KM = 5.0
+CONJ_THRESHOLD_KM = 1.0          # alert screening distance; re-passes farther out need no manoeuvre
 TARGET_MISS_KM = 2.0
 WINDOW_LEADS_S = (4.0 * 3600, 2.5 * 3600, 1.0 * 3600)     # W1 early (cheap), W2, W3 late (expensive)
 WINDOW_LEN_S = 600.0
@@ -99,9 +99,10 @@ def plant_debris(model, sat_id: str, tca: float, miss_km: float, crossing_deg: f
             "simulated": True, "note": f"planted to pass {sat_id} (crossing {crossing_deg} deg)"}
 
 
-def windows_for(tca: float, miss_km: float, t_min: float) -> list[ManeuverWindow]:
+def windows_for(tca: float, miss_km: float, t_min: float, leads_s=None) -> list[ManeuverWindow]:
+    """Windows ending `leads_s` (default WINDOW_LEADS_S) before TCA; a debris record may set its own leads."""
     out = []
-    for wid, lead in zip(("W1", "W2", "W3"), WINDOW_LEADS_S):
+    for wid, lead in zip(("W1", "W2", "W3"), leads_s or WINDOW_LEADS_S):
         t_end = tca - lead
         t_start = t_end - WINDOW_LEN_S
         if t_start < t_min or t_end > tca - CAM_LEAD_S:
@@ -134,11 +135,11 @@ def find_conjunctions(model, debris: list[dict] | None = None, sat_ids=None) -> 
                                                                              fine, step_s=1.0), axis=1)
                     j = int(np.argmin(fd))
                     if fd[j] <= CONJ_THRESHOLD_KM:
-                        found.append((float(fine[j]), sat, obj["object_id"], float(fd[j])))
-    found.sort()
+                        found.append((float(fine[j]), sat, obj["object_id"], float(fd[j]), obj.get("window_leads_s")))
+    found.sort(key=lambda x: x[:4])
     out = []
-    for i, (tca, sat, oid, miss) in enumerate(found, 1):
-        wins = windows_for(tca, miss, float(t[0]))
+    for i, (tca, sat, oid, miss, leads) in enumerate(found, 1):
+        wins = windows_for(tca, miss, float(t[0]), leads)
         if wins:
             out.append(Conjunction(conj_id=f"CJ-{i}", sat_id=sat, object_id=oid, tca=round(tca, 1),
                                    miss_km=round(miss, 3), windows=wins))
