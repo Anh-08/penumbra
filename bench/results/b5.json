@@ -40,7 +40,8 @@
  },
  "notes": [
   "Payload uptime is computed from the commanded duty timeline (what the ground flies).",
-  "soc_violations = faulty satellites whose true SOC goes below 0.30 after onset; most happen before any uplink (detection waits for a contact). plan_attributable_violations counts the cases that were above 0.30 when the plan executed and fell below it afterwards: that is what the plan choice controls. A verified plan can still breach the floor in the truth because the planning model differs from the truth (T11) and the scored hypothesis may be wrong."
+  "soc_violations = faulty satellites whose true SOC goes below 0.30 after onset; most happen before any uplink (detection waits for a contact). plan_attributable_violations counts the cases that were above 0.30 when the plan executed and fell below it afterwards: that is what the plan choice controls. A verified plan can still breach the floor in the truth because the planning model differs from the truth (T11) and the scored hypothesis may be wrong.",
+  "Seed 4 / SAT-24 verifier miss (retrospective analysis, no code change): SET_PAYLOAD_DUTY(0.4) began at true SOC 0.463 and reached 0.126, 0.174 below the 0.300 floor; SAFE_MODE held at 0.459. Replaying the same seed and MC 40 verifier inputs gave that plan worst_margin_soc 0.129689 (plausible H2 p5 SOC 0.429689) and pass_rate 1.0 in all six hypotheses, so no pass-rate threshold at or below 1.0 would reject it (the current threshold is 0.95). An additional one-sided SOC uncertainty buffer greater than 0.129689 (about 6.49 times the current initial-SOC sigma of 0.02, as an equivalent buffer rather than a calibrated parameter change), or a minimum predicted margin of 0.130, would reject this plan. The aggregate results do not identify which physical Monte Carlo sigma should change; the miss may reflect model bias or hypothesis mismatch."
  ],
  "data": {
   "real": [
