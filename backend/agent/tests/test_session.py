@@ -89,3 +89,15 @@ def test_cli_stub_does_not_write_unless_asked(tmp_path, capsys):
     main(["--record", "--runs-dir", str(tmp_path)])
     assert len(list(tmp_path.glob("stub-*.jsonl"))) == 1
     assert session.model_kind(StubModel()) == "stub"
+
+
+def test_tee_recorder_writes_through_and_calls_back(tmp_path):
+    from backend.agent.session import TeeRecorder
+    from backend.recorder import FlightRecorder
+
+    seen = []
+    with FlightRecorder("tee", path=tmp_path / "tee.jsonl") as flight:
+        run_agent(StubModel(), Dispatcher(MockBackend()), TeeRecorder(flight, seen.append))
+    written = load_events(tmp_path / "tee.jsonl")
+    assert [e.seq for e in seen] == [e.seq for e in written] and len(seen) > 0
+    assert all(type(e).__name__ == "RecorderEvent" for e in seen)
