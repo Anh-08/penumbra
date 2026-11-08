@@ -1,4 +1,5 @@
 import time
+from threading import Event
 
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -69,6 +70,31 @@ def test_approval_and_reveal_publish_contract_messages():
             assert revealed.status_code == 200
             assert revealed.json()['truth']['kind'] == 'stuck_on_load'
             assert ws.receive_json()['type'] == 'reveal'
+
+
+def test_slow_scenario_build_returns_without_blocking_api_startup():
+    release = Event()
+
+    class SlowProvider(MockProvider):
+        background_scenario = True
+
+        def set_scenario(self, name, seed):
+            assert release.wait(2)
+            super().set_scenario(name, seed)
+
+    with TestClient(create_app(provider=SlowProvider(t0=1_800_000_000.0))) as api:
+        start = time.monotonic()
+        response = api.post('/api/scenario', json={'name': 'fault-storm', 'seed': 7})
+        assert response.json()['status'] == 'building'
+        assert time.monotonic() - start < .5
+        assert api.post('/api/fault-storm').status_code == 503
+        release.set()
+        for _ in range(20):
+            if api.app.state.scenario_task.done():
+                break
+            time.sleep(.01)
+        assert api.app.state.scenario_task.done()
+        assert api.post('/api/fault-storm').status_code == 200
 
 
 def test_clock_runs_at_requested_speed_and_rejects_out_of_range():
