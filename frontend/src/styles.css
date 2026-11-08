@@ -9,13 +9,15 @@ button { font: inherit; }
 .globe-vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 43% 48%, transparent 32%, rgba(3, 6, 12, .56) 90%); }
 .scene-error { position: absolute; left: 32px; top: 96px; z-index: var(--z-banner); color: var(--c-refused); font: var(--fs-body) var(--font-ui); }
 
-.top-bar { position: absolute; z-index: var(--z-top); inset: 0 0 auto; height: var(--top-h); display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); padding: 0 var(--sp-5); border-bottom: 1px solid var(--c-line-strong); background: rgba(5, 8, 13, .94); }
-.top-brand { display: flex; align-items: baseline; gap: var(--sp-4); white-space: nowrap; }
+.top-bar { position: absolute; z-index: var(--z-top); inset: 0 0 auto; height: var(--top-h); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--sp-4); padding: 0 var(--sp-5); border-bottom: 1px solid var(--c-line-strong); background: rgba(5, 8, 13, .94); }
+/* T45: equal side columns keep the stepper centred on the viewport; explicit columns keep the status group on the
+   right when the stepper is hidden (narrow layout). */
+.top-brand { grid-column: 1; justify-self: start; display: flex; align-items: baseline; gap: var(--sp-4); white-space: nowrap; }
 .top-brand strong { font: 600 22px var(--font-cond); letter-spacing: .2em; }
 /* Progress stepper (T41): AI PLAN > VERIFICATION > APPROVAL. Not interactive. When a stage becomes active, the arrow
    into it and then the stage (text + underline) fill left to right, about 600 ms in all; leaving a stage is instant,
    and the reduced-motion tokens make the fill instant too. */
-.stage-stepper { display: flex; gap: var(--sp-3); align-items: stretch; align-self: stretch; cursor: default; user-select: none; }
+.stage-stepper { grid-column: 2; justify-self: center; display: flex; gap: var(--sp-3); align-items: stretch; align-self: stretch; cursor: default; user-select: none; }
 .stage, .stage-arrow { --stage-fill: var(--c-ink); position: relative; display: grid; align-items: center; }
 .stage.last.active, .stage-arrow.last.active { --stage-fill: var(--c-alert); }
 .stage.done, .stage-arrow.done { --stage-fill: var(--c-verified); }
@@ -27,7 +29,7 @@ button { font: inherit; }
 .stage-arrow .chevron-base { stroke: var(--c-ink-3); }
 .stage-arrow .chevron-fill { stroke: var(--stage-fill); clip-path: inset(0 100% 0 0); }
 .stage-arrow.active .chevron-fill, .stage-arrow.done .chevron-fill { clip-path: inset(0 0 0 0); transition: clip-path var(--dur-2) linear; }
-.top-status { display: flex; align-items: center; gap: var(--sp-4); white-space: nowrap; }
+.top-status { grid-column: 3; justify-self: end; display: flex; align-items: center; gap: var(--sp-4); white-space: nowrap; }
 .mode-chip, .speed-chip { border: 1px solid var(--c-line-strong); border-radius: var(--r-1); padding: 4px 7px; color: var(--c-ink-2); font: 500 var(--fs-label) var(--font-cond); letter-spacing: .04em; }
 .top-status time { font: var(--fs-title) var(--font-data); font-variant-numeric: tabular-nums slashed-zero; }
 .speed-chip { color: var(--c-ink); font-family: var(--font-data); }
