@@ -42,6 +42,7 @@ def window(b):
 def verified_ticket(d, commands=SHED):
     pid = d.dispatch("propose_plan", {"sat_id": MOCK_SAT, "commands": commands}).result["plan_id"]
     sim = d.dispatch("simulate", {"plan_id": pid}).result
+    d.dispatch("schedule_uplink", {"plan_id": pid})
     ticket = d.dispatch("request_approval", {"plan_id": pid}).result
     return pid, sim, ticket
 

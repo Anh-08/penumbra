@@ -4,6 +4,10 @@ The model never writes numbers. It writes placeholders like {S-3.worst_margin_so
 in from its own results. On top of the contract's digit rule, the filter also rejects ids that do not exist
 (so "P-80 percent" cannot smuggle a number), placeholders that do not resolve to a single value, and any other
 {...} text.
+
+`normalize` first unwraps braces around a bare token ({P-2} -> P-2, {H2} -> H2, {SVALBARD} -> SVALBARD), a habit
+of Gemini's; the unwrapped text still goes through every check. Besides the stored fields, a few derived fields
+are available (DERIVED_FIELDS), e.g. {P-2.n_commands} and {AL-1.time_to_critical_min}.
 """
 from __future__ import annotations
 
@@ -16,6 +20,7 @@ from pydantic import BaseModel
 from contracts import ALLOWED_ID_RE, HYPOTHESES, PLACEHOLDER_RE, SAT_IDS, bare_digits
 
 _BRACES_RE = re.compile(r"\{[^{}]*\}|[{}]")
+_BARE_TOKEN_RE = re.compile(r"\{\s*([A-Za-z][A-Za-z0-9_-]*)\s*\}")  # {P-2}, {H2}, {SVALBARD}: no field
 _TIME_FIELDS = {"t", "ts", "aos", "los", "t_exec", "start_t", "end_t", "onset_t", "next_contact_aos", "deadline_t"}
 _FRACTION_FIELDS = {"pass_rate", "payload_uptime", "payload_uptime_worst", "duty", "posterior"}
 
@@ -28,6 +33,27 @@ class Registry(Protocol):
 
 class RenderError(ValueError):
     pass
+
+
+# Derived fields per id prefix: (field name -> function of the stored object).
+DERIVED_FIELDS: dict[str, dict[str, Any]] = {
+    "P-": {"n_commands": lambda p: len(p.commands), "station_id": lambda p: p.uplink.station_id},
+    "AL-": {"time_to_critical_min": lambda a: (None if a.time_to_critical_s is None
+                                                else int(round(a.time_to_critical_s / 60.0)))},
+}
+
+# What the prompt and the re-ask message list as usable placeholders.
+USABLE_FIELDS = {
+    "S-n": ["worst_margin_soc", "payload_uptime_worst", "n_commands", "passes_all"],
+    "P-n": ["n_commands", "station_id", "sat_id", "kind"],
+    "AP-n": ["tier", "plan_id", "sat_id"],
+    "AL-n": ["sat_id", "severity", "reason_key", "time_to_critical_min"],
+}
+
+
+def normalize(text: str) -> str:
+    """Unwrap braces around a bare token: {P-2} -> P-2. Real placeholders ({P-2.n_commands}) are untouched."""
+    return _BARE_TOKEN_RE.sub(lambda m: m.group(1), text)
 
 
 def narration_problems(text: str, registry: Registry) -> list[str]:
@@ -77,6 +103,9 @@ def _resolve(ref: str, registry: Registry) -> tuple[str, Any]:
     obj = registry.lookup(obj_id)
     if obj is None:
         raise RenderError(f"unknown object {obj_id}")
+    derived = next((d for prefix, d in DERIVED_FIELDS.items() if obj_id.startswith(prefix)), {})
+    if path in derived:
+        return path, derived[path](obj)
     value: Any = obj.model_dump(mode="python")
     field = obj_id
     for part in path.split("."):
@@ -121,6 +150,8 @@ def format_value(field: str, value: Any) -> str:
         return f"{value:.2f} V"
     if "soc" in field or field in _FRACTION_FIELDS:
         return f"{value * 100:.1f} %"
+    if field.endswith("_min"):
+        return f"{value:.0f} min"
     if isinstance(value, int):
         return str(value)
     return f"{value:.3g}"
