@@ -74,7 +74,7 @@ button { font: inherit; }
 .director-refusal { margin-top: var(--sp-1); padding: var(--sp-2); display: flex; flex-direction: column; gap: 2px; color: var(--c-refused); background: var(--c-refused-14); border: 1px solid var(--c-refused); font: 500 var(--fs-label) var(--font-cond); }
 .director-refusal strong { font-weight: 600; }.director-error { color: var(--c-refused); font: 500 var(--fs-label) var(--font-cond); }
 .director-executed { min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--c-verified); background: var(--c-verified-14); border: 1px solid var(--c-verified); font: 600 var(--fs-2m) var(--font-cond); }.director-executed small { color: var(--c-ink-2); font: 500 var(--fs-label) var(--font-cond); }
-.director-slot:has(.director-refusal) { height: 222px; }
+.director-slot:has(.director-refusal) { height: auto; min-height: 222px; }
 .provenance-legend { left: calc(2 * var(--inset)); bottom: calc(var(--strip-h) + 2 * var(--gap)); width: 420px; height: 72px; padding: 8px var(--sp-4); display: flex; flex-direction: column; justify-content: center; gap: 4px; z-index: var(--z-hud); }
 .legend-line { display: grid; grid-template-columns: 28px 85px minmax(0, 1fr); align-items: center; gap: var(--sp-2); white-space: nowrap; color: var(--c-ink-2); font: 500 var(--fs-label) var(--font-cond); }
 .legend-line strong { color: var(--c-ink); font-weight: 600; }
@@ -91,7 +91,7 @@ button { font: inherit; }
   .trace-panel { padding: var(--sp-2) var(--sp-3); }.trace-caption { height: 30px; }.trace-heading { height: 16px; }.trace-rows { height: calc(100% - 46px); }.trace-row { min-height: 22px; grid-template-columns: 76px 68px 145px minmax(0, 1fr) 180px; }
   .director-wait { min-height: 48px; }.provenance-legend { left: calc(2 * var(--inset)); width: 320px; height: 52px; padding: 4px var(--sp-2); gap: 1px; }.legend-line { grid-template-columns: 20px 72px minmax(0, 1fr); gap: var(--sp-1); }.legend-swatch { width: 20px; }
   .director-action, .director-executed { min-height: 48px; }.director-action { font-size: var(--fs-title); }
-  .director-slot:has(.director-refusal) { height: 168px; }
+  .director-slot:has(.director-refusal) { height: auto; min-height: 168px; }
 }
 
 @media (max-width: 1100px) {
