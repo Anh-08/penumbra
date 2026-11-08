@@ -1,0 +1,1103 @@
+{
+ "benchmark": "B5 payload uptime: verified plan vs SAFE_MODE immediately (T29)",
+ "generated_utc": "2026-11-08T01:43:29+00:00",
+ "n": 10,
+ "seeds": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9
+ ],
+ "summary": {
+  "verified_plan": {
+   "cases": 42,
+   "mean_payload_uptime_after_alert": 0.236,
+   "soc_violations": 11,
+   "soc_violations_after_fix": 11,
+   "plan_attributable_violations": 1,
+   "already_below_floor_at_fix": 10
+  },
+  "safe_mode_immediately": {
+   "cases": 42,
+   "mean_payload_uptime_after_alert": 0.009,
+   "soc_violations": 10,
+   "soc_violations_after_fix": 10,
+   "plan_attributable_violations": 0,
+   "already_below_floor_at_fix": 10
+  }
+ },
+ "settings": {
+  "storm": "same seeded storms as B3",
+  "verified_plan": "best of 6 candidates by the verifier's rank (duty 0.6/0.4/0.2, duty 0.2 + AUX off, payload off, SAFE_MODE), MC 40",
+  "safe_mode_immediately": "SAFE_MODE at the first contact after the alert",
+  "uptime": "mean commanded payload duty from the alert to the end of the 12 h run"
+ },
+ "notes": [
+  "Payload uptime is computed from the commanded duty timeline (what the ground flies).",
+  "soc_violations = faulty satellites whose true SOC goes below 0.30 after onset; most happen before any uplink (detection waits for a contact). plan_attributable_violations counts the cases that were above 0.30 when the plan executed and fell below it afterwards: that is what the plan choice controls. A verified plan can still breach the floor in the truth because the planning model differs from the truth (T11) and the scored hypothesis may be wrong."
+ ],
+ "data": {
+  "real": [
+   "24 satellite orbits (cached public OMM elements, renamed SAT-01..SAT-24)",
+   "Sun/Earth geometry (JPL DE421) and the illumination derived from it",
+   "ground station sites and 10 deg contact windows",
+   "battery OCV curve, R0, coulombic efficiency and fade rate inside the truth simulator (NASA PCoE fit)"
+  ],
+  "simulated": [
+   "EPS telemetry and truth",
+   "faults and tasking (seeded)"
+  ]
+ },
+ "rows": [
+  {
+   "seed": 0,
+   "arm": "verified_plan",
+   "cases": [
+    {
+     "sat_id": "SAT-09",
+     "choice": "LOAD_OFF(PAYLOAD)",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.582,
+     "violated": false,
+     "soc_at_fix": 0.586,
+     "min_soc_after_fix": 0.586,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-15",
+     "choice": "SET_PAYLOAD_DUTY(0.2) + LOAD_OFF(AUX)",
+     "payload_uptime_after_alert": 0.201,
+     "min_soc": 0.53,
+     "violated": false,
+     "soc_at_fix": 0.532,
+     "min_soc_after_fix": 0.532,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-17",
+     "choice": "SET_PAYLOAD_DUTY(0.6)",
+     "payload_uptime_after_alert": 0.6,
+     "min_soc": 0.179,
+     "violated": true,
+     "soc_at_fix": 0.197,
+     "min_soc_after_fix": 0.197,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-20",
+     "choice": "SET_PAYLOAD_DUTY(0.2)",
+     "payload_uptime_after_alert": 0.201,
+     "min_soc": 0.373,
+     "violated": false,
+     "soc_at_fix": 0.374,
+     "min_soc_after_fix": 0.374,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    }
+   ]
+  },
+  {
+   "seed": 0,
+   "arm": "safe_mode_immediately",
+   "cases": [
+    {
+     "sat_id": "SAT-09",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.582,
+     "violated": false,
+     "soc_at_fix": 0.586,
+     "min_soc_after_fix": 0.586,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-15",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.53,
+     "violated": false,
+     "soc_at_fix": 0.532,
+     "min_soc_after_fix": 0.532,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-17",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.179,
+     "violated": true,
+     "soc_at_fix": 0.197,
+     "min_soc_after_fix": 0.197,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-20",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.373,
+     "violated": false,
+     "soc_at_fix": 0.374,
+     "min_soc_after_fix": 0.374,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    }
+   ]
+  },
+  {
+   "seed": 1,
+   "arm": "verified_plan",
+   "cases": [
+    {
+     "sat_id": "SAT-24",
+     "choice": "LOAD_OFF(PAYLOAD)",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.327,
+     "violated": false,
+     "soc_at_fix": 0.33,
+     "min_soc_after_fix": 0.33,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-07",
+     "choice": "SET_PAYLOAD_DUTY(0.4)",
+     "payload_uptime_after_alert": 0.401,
+     "min_soc": 0.705,
+     "violated": false,
+     "soc_at_fix": 0.713,
+     "min_soc_after_fix": 0.713,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-05",
+     "choice": "SET_PAYLOAD_DUTY(0.2) + LOAD_OFF(AUX)",
+     "payload_uptime_after_alert": 0.201,
+     "min_soc": 0.734,
+     "violated": false,
+     "soc_at_fix": 0.736,
+     "min_soc_after_fix": 0.736,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-15",
+     "choice": "SET_PAYLOAD_DUTY(0.2)",
+     "payload_uptime_after_alert": 0.201,
+     "min_soc": 0.124,
+     "violated": true,
+     "soc_at_fix": 0.155,
+     "min_soc_after_fix": 0.155,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-02",
+     "choice": "LOAD_OFF(PAYLOAD)",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.809,
+     "violated": false,
+     "soc_at_fix": 0.865,
+     "min_soc_after_fix": 0.809,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    }
+   ]
+  },
+  {
+   "seed": 1,
+   "arm": "safe_mode_immediately",
+   "cases": [
+    {
+     "sat_id": "SAT-24",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.327,
+     "violated": false,
+     "soc_at_fix": 0.33,
+     "min_soc_after_fix": 0.33,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-07",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.705,
+     "violated": false,
+     "soc_at_fix": 0.713,
+     "min_soc_after_fix": 0.713,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-05",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.734,
+     "violated": false,
+     "soc_at_fix": 0.736,
+     "min_soc_after_fix": 0.736,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-15",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.124,
+     "violated": true,
+     "soc_at_fix": 0.155,
+     "min_soc_after_fix": 0.155,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-02",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.809,
+     "violated": false,
+     "soc_at_fix": 0.865,
+     "min_soc_after_fix": 0.809,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    }
+   ]
+  },
+  {
+   "seed": 2,
+   "arm": "verified_plan",
+   "cases": [
+    {
+     "sat_id": "SAT-09",
+     "choice": "LOAD_OFF(PAYLOAD)",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.536,
+     "violated": false,
+     "soc_at_fix": 0.54,
+     "min_soc_after_fix": 0.54,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-13",
+     "choice": "LOAD_OFF(PAYLOAD)",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.509,
+     "violated": false,
+     "soc_at_fix": 0.512,
+     "min_soc_after_fix": 0.512,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-10",
+     "choice": "SET_PAYLOAD_DUTY(0.6)",
+     "payload_uptime_after_alert": 0.6,
+     "min_soc": 0.345,
+     "violated": false,
+     "soc_at_fix": 0.365,
+     "min_soc_after_fix": 0.365,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-21",
+     "choice": "SET_PAYLOAD_DUTY(0.4)",
+     "payload_uptime_after_alert": 0.401,
+     "min_soc": 0.26,
+     "violated": true,
+     "soc_at_fix": 0.278,
+     "min_soc_after_fix": 0.278,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    }
+   ]
+  },
+  {
+   "seed": 2,
+   "arm": "safe_mode_immediately",
+   "cases": [
+    {
+     "sat_id": "SAT-09",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.536,
+     "violated": false,
+     "soc_at_fix": 0.54,
+     "min_soc_after_fix": 0.54,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-13",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.509,
+     "violated": false,
+     "soc_at_fix": 0.512,
+     "min_soc_after_fix": 0.512,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-10",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.345,
+     "violated": false,
+     "soc_at_fix": 0.365,
+     "min_soc_after_fix": 0.365,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-21",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.26,
+     "violated": true,
+     "soc_at_fix": 0.278,
+     "min_soc_after_fix": 0.278,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    }
+   ]
+  },
+  {
+   "seed": 3,
+   "arm": "verified_plan",
+   "cases": [
+    {
+     "sat_id": "SAT-16",
+     "choice": "SET_PAYLOAD_DUTY(0.2)",
+     "payload_uptime_after_alert": 0.201,
+     "min_soc": 0.181,
+     "violated": true,
+     "soc_at_fix": 0.2,
+     "min_soc_after_fix": 0.2,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-01",
+     "choice": "SET_PAYLOAD_DUTY(0.2)",
+     "payload_uptime_after_alert": 0.201,
+     "min_soc": 0.584,
+     "violated": false,
+     "soc_at_fix": 0.588,
+     "min_soc_after_fix": 0.588,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-17",
+     "choice": "SET_PAYLOAD_DUTY(0.2) + LOAD_OFF(AUX)",
+     "payload_uptime_after_alert": 0.201,
+     "min_soc": 0.411,
+     "violated": false,
+     "soc_at_fix": 0.415,
+     "min_soc_after_fix": 0.415,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-22",
+     "choice": "SET_PAYLOAD_DUTY(0.2)",
+     "payload_uptime_after_alert": 0.316,
+     "min_soc": 0.249,
+     "violated": true,
+     "soc_at_fix": 0.258,
+     "min_soc_after_fix": 0.249,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    }
+   ]
+  },
+  {
+   "seed": 3,
+   "arm": "safe_mode_immediately",
+   "cases": [
+    {
+     "sat_id": "SAT-16",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.181,
+     "violated": true,
+     "soc_at_fix": 0.2,
+     "min_soc_after_fix": 0.2,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-01",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.584,
+     "violated": false,
+     "soc_at_fix": 0.588,
+     "min_soc_after_fix": 0.588,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-17",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.411,
+     "violated": false,
+     "soc_at_fix": 0.415,
+     "min_soc_after_fix": 0.415,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-22",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.145,
+     "min_soc": 0.25,
+     "violated": true,
+     "soc_at_fix": 0.258,
+     "min_soc_after_fix": 0.25,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    }
+   ]
+  },
+  {
+   "seed": 4,
+   "arm": "verified_plan",
+   "cases": [
+    {
+     "sat_id": "SAT-24",
+     "choice": "SET_PAYLOAD_DUTY(0.4)",
+     "payload_uptime_after_alert": 0.401,
+     "min_soc": 0.126,
+     "violated": true,
+     "soc_at_fix": 0.463,
+     "min_soc_after_fix": 0.126,
+     "violated_after_fix": true,
+     "plan_attributable_violation": true
+    },
+    {
+     "sat_id": "SAT-05",
+     "choice": "SET_PAYLOAD_DUTY(0.6)",
+     "payload_uptime_after_alert": 0.6,
+     "min_soc": 0.633,
+     "violated": false,
+     "soc_at_fix": 0.637,
+     "min_soc_after_fix": 0.637,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-20",
+     "choice": "SET_PAYLOAD_DUTY(0.2)",
+     "payload_uptime_after_alert": 0.201,
+     "min_soc": 0.564,
+     "violated": false,
+     "soc_at_fix": 0.301,
+     "min_soc_after_fix": 0.301,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-11",
+     "choice": "SET_PAYLOAD_DUTY(0.4)",
+     "payload_uptime_after_alert": 0.401,
+     "min_soc": 0.627,
+     "violated": false,
+     "soc_at_fix": 0.63,
+     "min_soc_after_fix": 0.63,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-10",
+     "choice": "LOAD_OFF(PAYLOAD)",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.731,
+     "violated": false,
+     "soc_at_fix": 0.938,
+     "min_soc_after_fix": 0.731,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    }
+   ]
+  },
+  {
+   "seed": 4,
+   "arm": "safe_mode_immediately",
+   "cases": [
+    {
+     "sat_id": "SAT-24",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.459,
+     "violated": false,
+     "soc_at_fix": 0.463,
+     "min_soc_after_fix": 0.463,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-05",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.633,
+     "violated": false,
+     "soc_at_fix": 0.637,
+     "min_soc_after_fix": 0.637,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-20",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.611,
+     "violated": false,
+     "soc_at_fix": 0.301,
+     "min_soc_after_fix": 0.301,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-11",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.627,
+     "violated": false,
+     "soc_at_fix": 0.63,
+     "min_soc_after_fix": 0.63,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-10",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.731,
+     "violated": false,
+     "soc_at_fix": 0.938,
+     "min_soc_after_fix": 0.731,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    }
+   ]
+  },
+  {
+   "seed": 5,
+   "arm": "verified_plan",
+   "cases": [
+    {
+     "sat_id": "SAT-09",
+     "choice": "LOAD_OFF(PAYLOAD)",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.546,
+     "violated": false,
+     "soc_at_fix": 0.548,
+     "min_soc_after_fix": 0.548,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-01",
+     "choice": "SET_PAYLOAD_DUTY(0.4)",
+     "payload_uptime_after_alert": 0.401,
+     "min_soc": 0.718,
+     "violated": false,
+     "soc_at_fix": 0.72,
+     "min_soc_after_fix": 0.72,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-10",
+     "choice": "SET_PAYLOAD_DUTY(0.4)",
+     "payload_uptime_after_alert": 0.401,
+     "min_soc": 0.654,
+     "violated": false,
+     "soc_at_fix": 0.656,
+     "min_soc_after_fix": 0.656,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-19",
+     "choice": "SET_PAYLOAD_DUTY(0.4)",
+     "payload_uptime_after_alert": 0.401,
+     "min_soc": 0.134,
+     "violated": true,
+     "soc_at_fix": 0.151,
+     "min_soc_after_fix": 0.151,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-11",
+     "choice": "LOAD_OFF(PAYLOAD)",
+     "payload_uptime_after_alert": 0.056,
+     "min_soc": 0.508,
+     "violated": false,
+     "soc_at_fix": 0.994,
+     "min_soc_after_fix": 0.74,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    }
+   ]
+  },
+  {
+   "seed": 5,
+   "arm": "safe_mode_immediately",
+   "cases": [
+    {
+     "sat_id": "SAT-09",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.546,
+     "violated": false,
+     "soc_at_fix": 0.548,
+     "min_soc_after_fix": 0.548,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-01",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.718,
+     "violated": false,
+     "soc_at_fix": 0.72,
+     "min_soc_after_fix": 0.72,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-10",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.654,
+     "violated": false,
+     "soc_at_fix": 0.656,
+     "min_soc_after_fix": 0.656,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-19",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.134,
+     "violated": true,
+     "soc_at_fix": 0.151,
+     "min_soc_after_fix": 0.151,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-11",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.056,
+     "min_soc": 0.508,
+     "violated": false,
+     "soc_at_fix": 0.994,
+     "min_soc_after_fix": 0.74,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    }
+   ]
+  },
+  {
+   "seed": 6,
+   "arm": "verified_plan",
+   "cases": [
+    {
+     "sat_id": "SAT-19",
+     "choice": "SET_PAYLOAD_DUTY(0.4)",
+     "payload_uptime_after_alert": 0.401,
+     "min_soc": 0.457,
+     "violated": false,
+     "soc_at_fix": 0.459,
+     "min_soc_after_fix": 0.459,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-16",
+     "choice": "LOAD_OFF(PAYLOAD)",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.402,
+     "violated": false,
+     "soc_at_fix": 0.406,
+     "min_soc_after_fix": 0.406,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-18",
+     "choice": "SET_PAYLOAD_DUTY(0.2) + LOAD_OFF(AUX)",
+     "payload_uptime_after_alert": 0.201,
+     "min_soc": 0.132,
+     "violated": true,
+     "soc_at_fix": 0.143,
+     "min_soc_after_fix": 0.143,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-10",
+     "choice": "LOAD_OFF(PAYLOAD)",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.726,
+     "violated": false,
+     "soc_at_fix": 0.933,
+     "min_soc_after_fix": 0.726,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    }
+   ]
+  },
+  {
+   "seed": 6,
+   "arm": "safe_mode_immediately",
+   "cases": [
+    {
+     "sat_id": "SAT-19",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.457,
+     "violated": false,
+     "soc_at_fix": 0.459,
+     "min_soc_after_fix": 0.459,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-16",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.402,
+     "violated": false,
+     "soc_at_fix": 0.406,
+     "min_soc_after_fix": 0.406,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-18",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.132,
+     "violated": true,
+     "soc_at_fix": 0.143,
+     "min_soc_after_fix": 0.143,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-10",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.726,
+     "violated": false,
+     "soc_at_fix": 0.933,
+     "min_soc_after_fix": 0.726,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    }
+   ]
+  },
+  {
+   "seed": 7,
+   "arm": "verified_plan",
+   "cases": [
+    {
+     "sat_id": "SAT-05",
+     "choice": "SET_PAYLOAD_DUTY(0.2) + LOAD_OFF(AUX)",
+     "payload_uptime_after_alert": 0.201,
+     "min_soc": 0.642,
+     "violated": false,
+     "soc_at_fix": 0.649,
+     "min_soc_after_fix": 0.649,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-16",
+     "choice": "SET_PAYLOAD_DUTY(0.2)",
+     "payload_uptime_after_alert": 0.201,
+     "min_soc": 0.554,
+     "violated": false,
+     "soc_at_fix": 0.557,
+     "min_soc_after_fix": 0.557,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-01",
+     "choice": "SET_PAYLOAD_DUTY(0.2)",
+     "payload_uptime_after_alert": 0.201,
+     "min_soc": 0.567,
+     "violated": false,
+     "soc_at_fix": 0.571,
+     "min_soc_after_fix": 0.571,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    }
+   ]
+  },
+  {
+   "seed": 7,
+   "arm": "safe_mode_immediately",
+   "cases": [
+    {
+     "sat_id": "SAT-05",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.642,
+     "violated": false,
+     "soc_at_fix": 0.649,
+     "min_soc_after_fix": 0.649,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-16",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.554,
+     "violated": false,
+     "soc_at_fix": 0.557,
+     "min_soc_after_fix": 0.557,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-01",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.567,
+     "violated": false,
+     "soc_at_fix": 0.571,
+     "min_soc_after_fix": 0.571,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    }
+   ]
+  },
+  {
+   "seed": 8,
+   "arm": "verified_plan",
+   "cases": [
+    {
+     "sat_id": "SAT-24",
+     "choice": "SET_PAYLOAD_DUTY(0.2)",
+     "payload_uptime_after_alert": 0.201,
+     "min_soc": 0.635,
+     "violated": false,
+     "soc_at_fix": 0.639,
+     "min_soc_after_fix": 0.639,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-11",
+     "choice": "LOAD_OFF(PAYLOAD)",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.46,
+     "violated": false,
+     "soc_at_fix": 0.464,
+     "min_soc_after_fix": 0.464,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-05",
+     "choice": "SET_PAYLOAD_DUTY(0.6)",
+     "payload_uptime_after_alert": 0.6,
+     "min_soc": 0.603,
+     "violated": false,
+     "soc_at_fix": 0.606,
+     "min_soc_after_fix": 0.606,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-22",
+     "choice": "SET_PAYLOAD_DUTY(0.2) + LOAD_OFF(AUX)",
+     "payload_uptime_after_alert": 0.316,
+     "min_soc": 0.243,
+     "violated": true,
+     "soc_at_fix": 0.247,
+     "min_soc_after_fix": 0.243,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-09",
+     "choice": "LOAD_OFF(PAYLOAD)",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.452,
+     "violated": false,
+     "soc_at_fix": 0.456,
+     "min_soc_after_fix": 0.456,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-23",
+     "choice": "SET_PAYLOAD_DUTY(0.2) + LOAD_OFF(AUX)",
+     "payload_uptime_after_alert": 0.201,
+     "min_soc": 0.376,
+     "violated": false,
+     "soc_at_fix": 0.376,
+     "min_soc_after_fix": 0.376,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    }
+   ]
+  },
+  {
+   "seed": 8,
+   "arm": "safe_mode_immediately",
+   "cases": [
+    {
+     "sat_id": "SAT-24",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.635,
+     "violated": false,
+     "soc_at_fix": 0.639,
+     "min_soc_after_fix": 0.639,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-11",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.46,
+     "violated": false,
+     "soc_at_fix": 0.464,
+     "min_soc_after_fix": 0.464,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-05",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.603,
+     "violated": false,
+     "soc_at_fix": 0.606,
+     "min_soc_after_fix": 0.606,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-22",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.145,
+     "min_soc": 0.244,
+     "violated": true,
+     "soc_at_fix": 0.247,
+     "min_soc_after_fix": 0.244,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-09",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.452,
+     "violated": false,
+     "soc_at_fix": 0.456,
+     "min_soc_after_fix": 0.456,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-23",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.376,
+     "violated": false,
+     "soc_at_fix": 0.376,
+     "min_soc_after_fix": 0.376,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    }
+   ]
+  },
+  {
+   "seed": 9,
+   "arm": "verified_plan",
+   "cases": [
+    {
+     "sat_id": "SAT-18",
+     "choice": "SET_PAYLOAD_DUTY(0.2) + LOAD_OFF(AUX)",
+     "payload_uptime_after_alert": 0.201,
+     "min_soc": 0.214,
+     "violated": true,
+     "soc_at_fix": 0.222,
+     "min_soc_after_fix": 0.222,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-17",
+     "choice": "SET_PAYLOAD_DUTY(0.6)",
+     "payload_uptime_after_alert": 0.6,
+     "min_soc": 0.126,
+     "violated": true,
+     "soc_at_fix": 0.149,
+     "min_soc_after_fix": 0.149,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    }
+   ]
+  },
+  {
+   "seed": 9,
+   "arm": "safe_mode_immediately",
+   "cases": [
+    {
+     "sat_id": "SAT-18",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.214,
+     "violated": true,
+     "soc_at_fix": 0.222,
+     "min_soc_after_fix": 0.222,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    {
+     "sat_id": "SAT-17",
+     "choice": "SAFE_MODE",
+     "payload_uptime_after_alert": 0.001,
+     "min_soc": 0.126,
+     "violated": true,
+     "soc_at_fix": 0.149,
+     "min_soc_after_fix": 0.149,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    }
+   ]
+  }
+ ]
+}

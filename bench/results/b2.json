@@ -1,0 +1,482 @@
+{
+ "benchmark": "B2 diagnosis ablation (T29)",
+ "generated_utc": "2026-11-08T01:07:02+00:00",
+ "n": 40,
+ "seeds": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15,
+  16,
+  17,
+  18,
+  19,
+  20,
+  21,
+  22,
+  23,
+  24,
+  25,
+  26,
+  27,
+  28,
+  29,
+  30,
+  31,
+  32,
+  33,
+  34,
+  35,
+  36,
+  37,
+  38,
+  39
+ ],
+ "accuracy_top1": {
+  "peers+diagnostic": 0.9,
+  "peers_only": 0.725,
+  "diagnostic_only": 0.85,
+  "neither": 0.775
+ },
+ "tool_calls_per_case": {
+  "peers+diagnostic": 8,
+  "peers_only": 3,
+  "diagnostic_only": 8,
+  "neither": 3
+ },
+ "accuracy_by_fault_kind": {
+  "capacity_fade": {
+   "peers+diagnostic": "7/7",
+   "peers_only": "6/7",
+   "diagnostic_only": "7/7",
+   "neither": "7/7"
+  },
+  "array_degradation": {
+   "peers+diagnostic": "10/12",
+   "peers_only": "7/12",
+   "diagnostic_only": "8/12",
+   "neither": "8/12"
+  },
+  "stuck_on_load": {
+   "peers+diagnostic": "7/7",
+   "peers_only": "4/7",
+   "diagnostic_only": "7/7",
+   "neither": "4/7"
+  },
+  "sensor_bias": {
+   "peers+diagnostic": "7/7",
+   "peers_only": "7/7",
+   "diagnostic_only": "7/7",
+   "neither": "7/7"
+  },
+  "beta_season": {
+   "peers+diagnostic": "5/7",
+   "peers_only": "5/7",
+   "diagnostic_only": "5/7",
+   "neither": "5/7"
+  }
+ },
+ "settings": {
+  "fleet": [
+   "SAT-07",
+   "SAT-12",
+   "SAT-19"
+  ],
+  "target": "SAT-07",
+  "hours": 12.0,
+  "beta_deg": 20.0,
+  "contacts": "10 min every 90 min",
+  "diagnostic": "backend.verify.diagnostics.standard_diagnostic",
+  "scored_after": "two passes with the fault (no diagnostic) or the diagnostic pass"
+ },
+ "notes": [
+  "Same worlds and telemetry for all arms; only the scorer input changes.",
+  "'peers' = backend.verify.scoring.score_fleet (beta season is one fleet event); without peers = per-satellite posterior.",
+  "Tool calls are the agent protocol's count, not a measured agent run."
+ ],
+ "data": {
+  "real": [
+   "battery OCV curve, R0, coulombic efficiency and fade rate inside the truth simulator (NASA PCoE fit)"
+  ],
+  "simulated": [
+   "orbit (synthetic circular 500 km, beta 20 deg)",
+   "contacts",
+   "EPS telemetry",
+   "faults (seeded, backend.eps.faults.seeded_fault)"
+  ]
+ },
+ "rows": [
+  {
+   "seed": 0,
+   "truth": "H3",
+   "kind": "capacity_fade",
+   "top_peers+diagnostic": "H3",
+   "top_peers_only": "H3",
+   "top_diagnostic_only": "H3",
+   "top_neither": "H3"
+  },
+  {
+   "seed": 1,
+   "truth": "H1",
+   "kind": "array_degradation",
+   "top_peers+diagnostic": "H1",
+   "top_peers_only": "H1",
+   "top_diagnostic_only": "H1",
+   "top_neither": "H1"
+  },
+  {
+   "seed": 2,
+   "truth": "H3",
+   "kind": "capacity_fade",
+   "top_peers+diagnostic": "H3",
+   "top_peers_only": "H3",
+   "top_diagnostic_only": "H3",
+   "top_neither": "H3"
+  },
+  {
+   "seed": 3,
+   "truth": "H2",
+   "kind": "stuck_on_load",
+   "top_peers+diagnostic": "H2",
+   "top_peers_only": "H0",
+   "top_diagnostic_only": "H2",
+   "top_neither": "H0"
+  },
+  {
+   "seed": 4,
+   "truth": "H2",
+   "kind": "stuck_on_load",
+   "top_peers+diagnostic": "H2",
+   "top_peers_only": "H0",
+   "top_diagnostic_only": "H2",
+   "top_neither": "H0"
+  },
+  {
+   "seed": 5,
+   "truth": "H3",
+   "kind": "capacity_fade",
+   "top_peers+diagnostic": "H3",
+   "top_peers_only": "H3",
+   "top_diagnostic_only": "H3",
+   "top_neither": "H3"
+  },
+  {
+   "seed": 6,
+   "truth": "H4",
+   "kind": "sensor_bias",
+   "top_peers+diagnostic": "H4",
+   "top_peers_only": "H4",
+   "top_diagnostic_only": "H4",
+   "top_neither": "H4"
+  },
+  {
+   "seed": 7,
+   "truth": "H5",
+   "kind": "beta_season",
+   "top_peers+diagnostic": "H5",
+   "top_peers_only": "H5",
+   "top_diagnostic_only": "H5",
+   "top_neither": "H5"
+  },
+  {
+   "seed": 8,
+   "truth": "H4",
+   "kind": "sensor_bias",
+   "top_peers+diagnostic": "H4",
+   "top_peers_only": "H4",
+   "top_diagnostic_only": "H4",
+   "top_neither": "H4"
+  },
+  {
+   "seed": 9,
+   "truth": "H4",
+   "kind": "sensor_bias",
+   "top_peers+diagnostic": "H4",
+   "top_peers_only": "H4",
+   "top_diagnostic_only": "H4",
+   "top_neither": "H4"
+  },
+  {
+   "seed": 10,
+   "truth": "H3",
+   "kind": "capacity_fade",
+   "top_peers+diagnostic": "H3",
+   "top_peers_only": "H5",
+   "top_diagnostic_only": "H3",
+   "top_neither": "H3"
+  },
+  {
+   "seed": 11,
+   "truth": "H1",
+   "kind": "array_degradation",
+   "top_peers+diagnostic": "H1",
+   "top_peers_only": "H5",
+   "top_diagnostic_only": "H5",
+   "top_neither": "H5"
+  },
+  {
+   "seed": 12,
+   "truth": "H2",
+   "kind": "stuck_on_load",
+   "top_peers+diagnostic": "H2",
+   "top_peers_only": "H0",
+   "top_diagnostic_only": "H2",
+   "top_neither": "H0"
+  },
+  {
+   "seed": 13,
+   "truth": "H5",
+   "kind": "beta_season",
+   "top_peers+diagnostic": "H0",
+   "top_peers_only": "H0",
+   "top_diagnostic_only": "H0",
+   "top_neither": "H0"
+  },
+  {
+   "seed": 14,
+   "truth": "H5",
+   "kind": "beta_season",
+   "top_peers+diagnostic": "H5",
+   "top_peers_only": "H5",
+   "top_diagnostic_only": "H5",
+   "top_neither": "H5"
+  },
+  {
+   "seed": 15,
+   "truth": "H2",
+   "kind": "stuck_on_load",
+   "top_peers+diagnostic": "H2",
+   "top_peers_only": "H2",
+   "top_diagnostic_only": "H2",
+   "top_neither": "H2"
+  },
+  {
+   "seed": 16,
+   "truth": "H4",
+   "kind": "sensor_bias",
+   "top_peers+diagnostic": "H4",
+   "top_peers_only": "H4",
+   "top_diagnostic_only": "H4",
+   "top_neither": "H4"
+  },
+  {
+   "seed": 17,
+   "truth": "H5",
+   "kind": "beta_season",
+   "top_peers+diagnostic": "H5",
+   "top_peers_only": "H5",
+   "top_diagnostic_only": "H5",
+   "top_neither": "H5"
+  },
+  {
+   "seed": 18,
+   "truth": "H2",
+   "kind": "stuck_on_load",
+   "top_peers+diagnostic": "H2",
+   "top_peers_only": "H2",
+   "top_diagnostic_only": "H2",
+   "top_neither": "H2"
+  },
+  {
+   "seed": 19,
+   "truth": "H5",
+   "kind": "beta_season",
+   "top_peers+diagnostic": "H5",
+   "top_peers_only": "H5",
+   "top_diagnostic_only": "H5",
+   "top_neither": "H5"
+  },
+  {
+   "seed": 20,
+   "truth": "H1",
+   "kind": "array_degradation",
+   "top_peers+diagnostic": "H0",
+   "top_peers_only": "H0",
+   "top_diagnostic_only": "H0",
+   "top_neither": "H0"
+  },
+  {
+   "seed": 21,
+   "truth": "H2",
+   "kind": "stuck_on_load",
+   "top_peers+diagnostic": "H2",
+   "top_peers_only": "H2",
+   "top_diagnostic_only": "H2",
+   "top_neither": "H2"
+  },
+  {
+   "seed": 22,
+   "truth": "H1",
+   "kind": "array_degradation",
+   "top_peers+diagnostic": "H5",
+   "top_peers_only": "H5",
+   "top_diagnostic_only": "H5",
+   "top_neither": "H0"
+  },
+  {
+   "seed": 23,
+   "truth": "H5",
+   "kind": "beta_season",
+   "top_peers+diagnostic": "H0",
+   "top_peers_only": "H0",
+   "top_diagnostic_only": "H0",
+   "top_neither": "H0"
+  },
+  {
+   "seed": 24,
+   "truth": "H3",
+   "kind": "capacity_fade",
+   "top_peers+diagnostic": "H3",
+   "top_peers_only": "H3",
+   "top_diagnostic_only": "H3",
+   "top_neither": "H3"
+  },
+  {
+   "seed": 25,
+   "truth": "H5",
+   "kind": "beta_season",
+   "top_peers+diagnostic": "H5",
+   "top_peers_only": "H5",
+   "top_diagnostic_only": "H5",
+   "top_neither": "H5"
+  },
+  {
+   "seed": 26,
+   "truth": "H2",
+   "kind": "stuck_on_load",
+   "top_peers+diagnostic": "H2",
+   "top_peers_only": "H2",
+   "top_diagnostic_only": "H2",
+   "top_neither": "H2"
+  },
+  {
+   "seed": 27,
+   "truth": "H1",
+   "kind": "array_degradation",
+   "top_peers+diagnostic": "H1",
+   "top_peers_only": "H1",
+   "top_diagnostic_only": "H1",
+   "top_neither": "H1"
+  },
+  {
+   "seed": 28,
+   "truth": "H1",
+   "kind": "array_degradation",
+   "top_peers+diagnostic": "H1",
+   "top_peers_only": "H1",
+   "top_diagnostic_only": "H1",
+   "top_neither": "H1"
+  },
+  {
+   "seed": 29,
+   "truth": "H1",
+   "kind": "array_degradation",
+   "top_peers+diagnostic": "H1",
+   "top_peers_only": "H1",
+   "top_diagnostic_only": "H1",
+   "top_neither": "H1"
+  },
+  {
+   "seed": 30,
+   "truth": "H4",
+   "kind": "sensor_bias",
+   "top_peers+diagnostic": "H4",
+   "top_peers_only": "H4",
+   "top_diagnostic_only": "H4",
+   "top_neither": "H4"
+  },
+  {
+   "seed": 31,
+   "truth": "H1",
+   "kind": "array_degradation",
+   "top_peers+diagnostic": "H1",
+   "top_peers_only": "H1",
+   "top_diagnostic_only": "H1",
+   "top_neither": "H1"
+  },
+  {
+   "seed": 32,
+   "truth": "H4",
+   "kind": "sensor_bias",
+   "top_peers+diagnostic": "H4",
+   "top_peers_only": "H4",
+   "top_diagnostic_only": "H4",
+   "top_neither": "H4"
+  },
+  {
+   "seed": 33,
+   "truth": "H3",
+   "kind": "capacity_fade",
+   "top_peers+diagnostic": "H3",
+   "top_peers_only": "H3",
+   "top_diagnostic_only": "H3",
+   "top_neither": "H3"
+  },
+  {
+   "seed": 34,
+   "truth": "H1",
+   "kind": "array_degradation",
+   "top_peers+diagnostic": "H1",
+   "top_peers_only": "H1",
+   "top_diagnostic_only": "H1",
+   "top_neither": "H1"
+  },
+  {
+   "seed": 35,
+   "truth": "H1",
+   "kind": "array_degradation",
+   "top_peers+diagnostic": "H1",
+   "top_peers_only": "H1",
+   "top_diagnostic_only": "H1",
+   "top_neither": "H1"
+  },
+  {
+   "seed": 36,
+   "truth": "H3",
+   "kind": "capacity_fade",
+   "top_peers+diagnostic": "H3",
+   "top_peers_only": "H3",
+   "top_diagnostic_only": "H3",
+   "top_neither": "H3"
+  },
+  {
+   "seed": 37,
+   "truth": "H4",
+   "kind": "sensor_bias",
+   "top_peers+diagnostic": "H4",
+   "top_peers_only": "H4",
+   "top_diagnostic_only": "H4",
+   "top_neither": "H4"
+  },
+  {
+   "seed": 38,
+   "truth": "H1",
+   "kind": "array_degradation",
+   "top_peers+diagnostic": "H1",
+   "top_peers_only": "H5",
+   "top_diagnostic_only": "H5",
+   "top_neither": "H5"
+  },
+  {
+   "seed": 39,
+   "truth": "H1",
+   "kind": "array_degradation",
+   "top_peers+diagnostic": "H1",
+   "top_peers_only": "H5",
+   "top_diagnostic_only": "H1",
+   "top_neither": "H1"
+  }
+ ]
+}
