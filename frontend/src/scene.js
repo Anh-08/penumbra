@@ -263,11 +263,12 @@ export function createScene(container, initialState, onSelect) {
   });
   const togglePin = () => {
     const wasParked = pinState.parked;
+    cameraMoving = false;
     pinState = reducePin(pinState, 'toggle', performance.now());
-    if (wasParked) {
+    if (pinState.fly && wasParked) {
       returningToBuffalo = true;
       flyToBuffalo(0.8, () => { returningToBuffalo = false; });
-    } else flyToBuffalo(1.5);
+    } else if (pinState.fly) flyToBuffalo(1.5);
   };
   const previousClick = viewer.screenSpaceEventHandler.getInputAction(ScreenSpaceEventType.LEFT_CLICK);
   viewer.screenSpaceEventHandler.setInputAction((click) => {
@@ -285,12 +286,19 @@ export function createScene(container, initialState, onSelect) {
   const onInputActivity = () => {
     if (pinState.parked) pinState = reducePin(pinState, 'activity', performance.now());
   };
+  let cameraMoving = false;
+  const onMoveStart = () => { if (pinState.parked) { cameraMoving = true; onInputActivity(); } };
+  const onMoveEnd = () => { cameraMoving = false; onInputActivity(); };
   window.addEventListener('keydown', onKeyDown);
   viewer.scene.canvas.addEventListener('pointermove', onPointerActivity);
   viewer.scene.canvas.addEventListener('pointerdown', onInputActivity);
   viewer.scene.canvas.addEventListener('wheel', onInputActivity);
+  viewer.camera.changed.addEventListener(onInputActivity);
+  viewer.camera.moveStart.addEventListener(onMoveStart);
+  viewer.camera.moveEnd.addEventListener(onMoveEnd);
   const idleTimer = window.setInterval(() => {
-    if (pinState.parked && performance.now() >= pinState.idleAt) togglePin();
+    if (pinState.parked && cameraMoving) onInputActivity();
+    else pinState = reducePin(pinState, 'tick', performance.now());
   }, 250);
 
   let previousFrame = performance.now();
@@ -356,6 +364,9 @@ export function createScene(container, initialState, onSelect) {
       viewer.scene.canvas.removeEventListener('pointermove', onPointerActivity);
       viewer.scene.canvas.removeEventListener('pointerdown', onInputActivity);
       viewer.scene.canvas.removeEventListener('wheel', onInputActivity);
+      viewer.camera.changed.removeEventListener(onInputActivity);
+      viewer.camera.moveStart.removeEventListener(onMoveStart);
+      viewer.camera.moveEnd.removeEventListener(onMoveEnd);
       viewer.scene.preRender.removeEventListener(moveCamera);
       viewer.destroy();
     },
