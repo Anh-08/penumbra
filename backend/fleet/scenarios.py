@@ -110,10 +110,17 @@ def single_stuck_load(seed: int = 0, sat_ids: tuple[str, ...] = SAT_IDS, hours: 
 STORM_ONSET_S = 2 * 3600.0
 
 
+def _whole_seconds(c):
+    """A conjunction with its times on whole seconds. The orbit time grid carries ~1e-5 s of float noise that differs
+    between machines; a burn executes at its window start and that time goes into the plan hash."""
+    wins = [w.model_copy(update={"t_start": float(round(w.t_start)), "t_end": float(round(w.t_end))}) for w in c.windows]
+    return c.model_copy(update={"tca": float(round(c.tca)), "windows": wins})
+
+
 def _world(name, seed, sat_ids, hours, faults_, soc0, tasking, focus=None, with_conjunctions=False) -> Scenario:
     env, contacts, model = orbit_environment(tuple(sat_ids), hours=hours)
     soc = np.array([soc0.get(s, 0.75) for s in env.sat_ids])
-    conj = [c for c in model.conjunctions() if c.sat_id in env.sat_ids] if with_conjunctions else []
+    conj = [_whole_seconds(c) for c in model.conjunctions() if c.sat_id in env.sat_ids] if with_conjunctions else []
     maneuvers = None
     if conj:
         from backend.eps.maneuver import windows_by_sat
