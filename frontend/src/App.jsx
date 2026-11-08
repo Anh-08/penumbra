@@ -5,6 +5,8 @@ import { connectFleetSocket } from './fleetSocket.js';
 import { createPanelState, reducePanel } from './panelState.js';
 import { createMatrixState, reduceMatrix, scheduleConflicts, worstPlausibleHypothesis } from './matrixState.js';
 import { advanceEclipse, approvalPayload, createFlightState, reduceFlight, ticketKey } from './flightState.js';
+import { ScalePanel } from './ScalePanel.jsx';
+import { createVoicePlayer, loadMuted, saveMuted, shouldSpeak } from './voice.js';
 import { MatrixOverlay } from './Matrix.jsx';
 import { FlightOverlay } from './FlightOverlay.jsx';
 import {
@@ -33,6 +35,11 @@ function App() {
   // A FAULT STORM run is directed by the API (backend/api/storm.py): it sends every demo_state, including
   // fastforward and reveal, so the page must not drive those transitions itself.
   const directed = useRef(false);
+  const storage = typeof window !== 'undefined' ? window.localStorage : null;
+  const [muted, setMuted] = useState(() => { try { return loadMuted(storage); } catch { return false; } });
+  const mutedRef = useRef(muted);
+  const voice = useRef(null);
+  if (voice.current === null) voice.current = createVoicePlayer((url) => new Audio(url));
   const [fleet, setFleet] = useState(initialFleet);
   const [selected, setSelected] = useState('SAT-07');
   const [panel, dispatch] = useReducer(reducePanel, undefined, createPanelState);
@@ -92,6 +99,9 @@ function App() {
           setFleet(message.data);
           dispatch(message);
           return;
+        }
+        if (message.type === 'callout' && shouldSpeak(message.data, mutedRef.current)) {
+          voice.current.play(message.data.audio_url);
         }
         if (message.type === 'alert' && !firstAlertSeen.current) {
           firstAlertSeen.current = true;
@@ -159,6 +169,14 @@ function App() {
     finally { setPending(false); }
   }
 
+  function toggleVoice() {
+    const next = !mutedRef.current;
+    mutedRef.current = next;
+    setMuted(next);
+    saveMuted(storage, next);
+    if (next) voice.current.stop();
+  }
+
   async function startStorm() {
     setPending(true);
     setActionError(null);
@@ -193,7 +211,8 @@ function App() {
     </div>
 
     <TopBar phase={panel.phase} mode={mode} time={fleet.t} speed={fleet.speed}
-      hasVerification={matrixOpen || panel.trace.some((row) => row.tool === 'simulate')} />
+      hasVerification={matrixOpen || panel.trace.some((row) => row.tool === 'simulate')}
+      muted={muted} onToggleVoice={toggleVoice} />
     {reconnecting && hasApiFleet.current && <div className="reconnect-badge" role="status">RECONNECTING · showing last state</div>}
 
     {!showPanels && <>
@@ -227,6 +246,7 @@ function App() {
       reveal={flight.reveals[selected]} socMin={SOC_MIN}
       chartPlanId={chartResult?.plan_id} chartHypothesis={worstPlausibleHypothesis(chartResult)} />}
 
+    {(!showPanels || panel.phase === 'reveal') && <ScalePanel />}
     <ProvenanceLegend localPreview={localPreview} />
     <DirectorSlot phase={panel.phase} approval={activeApproval} result={activeResult}
       refusal={activeRefusal} execution={flight.execution} pending={pending} error={actionError}
