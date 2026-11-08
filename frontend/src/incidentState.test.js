@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   canStart, createIncidentState, DEFAULT_SAT, FALLBACK_SATS, faultLabel, MAX_INCIDENTS, NOTICE_NO_KEY,
-  NOTICE_NO_SERVER, noticeFor, reduceIncident, requestBody,
+  NOTICE_NO_SERVER, noticeFor, reduceIncident, requestBody, startMode, START_TAGS, FALLBACK_FAULTS, faultEffect,
 } from './incidentState.js';
 
 const OPTIONS = {
@@ -70,4 +70,51 @@ test('malformed options degrade to the recorded run instead of throwing', () => 
   assert.equal(s.available, false);
   assert.equal(s.sats.length, 24);
   assert.equal(canStart(s), false);
+});
+
+test('T46: the recorded run stays the default until the judge changes something', () => {
+  const loaded = reduceIncident(createIncidentState(), { type: 'options_loaded', options: OPTIONS });
+  assert.equal(loaded.touched, false);
+  assert.equal(canStart(loaded), true);
+  assert.equal(startMode(loaded), 'recorded');
+  assert.equal(START_TAGS[startMode(loaded)], 'RECORDED · 90 s');
+  for (const action of [{ type: 'toggle_sat', satId: 'SAT-12' }, { type: 'set_fault', fault: 'sensor_bias' },
+    { type: 'set_selection', sats: ['SAT-07'] }]) {
+    const changed = reduceIncident(loaded, action);
+    assert.equal(changed.touched, true, action.type);
+    assert.equal(startMode(changed), 'custom', action.type);
+    assert.equal(START_TAGS[startMode(changed)], 'CUSTOM · LIVE');
+  }
+  // Rejected actions leave it untouched: the only selected chip, an unknown fault, an empty voice result.
+  assert.equal(reduceIncident(loaded, { type: 'toggle_sat', satId: 'SAT-07' }).touched, false);
+  assert.equal(reduceIncident(loaded, { type: 'set_fault', fault: 'meteor' }).touched, false);
+  assert.equal(reduceIncident(loaded, { type: 'set_selection', sats: [] }).touched, false);
+  // Options reloading keeps the flag.
+  const touched = reduceIncident(loaded, { type: 'toggle_sat', satId: 'SAT-12' });
+  assert.equal(reduceIncident(touched, { type: 'options_loaded', options: OPTIONS }).touched, true);
+});
+
+test('T46: touched without the custom path still runs the recorded incident', () => {
+  const noKey = reduceIncident(createIncidentState(), { type: 'options_loaded', options: { ...OPTIONS, live_available: false } });
+  const touched = { ...noKey, touched: true };
+  assert.equal(startMode(touched), 'recorded');
+  assert.equal(startMode({ ...createIncidentState(), touched: true }), 'recorded');
+});
+
+test('T46: reset goes back to SAT-07 + the first fault, untouched', () => {
+  let s = reduceIncident(createIncidentState(), { type: 'options_loaded', options: OPTIONS });
+  s = reduceIncident(s, { type: 'toggle_sat', satId: 'SAT-12' });
+  s = reduceIncident(s, { type: 'toggle_sat', satId: 'SAT-07' });
+  s = reduceIncident(s, { type: 'set_fault', fault: 'capacity_fade' });
+  assert.deepEqual([s.selected, s.fault, s.touched], [['SAT-12'], 'capacity_fade', true]);
+  const reset = reduceIncident(s, { type: 'reset' });
+  assert.deepEqual([reset.selected, reset.fault, reset.touched], [[DEFAULT_SAT], 'array_degradation', false]);
+  assert.equal(startMode(reset), 'recorded');
+});
+
+test('T46: every fault card has an effect line', () => {
+  assert.deepEqual(FALLBACK_FAULTS.map((f) => f.id), OPTIONS.faults.map((f) => f.id));
+  assert.deepEqual(FALLBACK_FAULTS.map((f) => faultEffect(f.id)), ['panels lose half their output',
+    'a 25 W line stays on', 'the battery holds a fifth', 'the gauge reads low and drifts']);
+  assert.equal(faultEffect('meteor'), '');
 });
