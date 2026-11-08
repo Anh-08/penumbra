@@ -43,13 +43,16 @@ test('each plan retains its own backend-issued approval ticket', () => {
     { approval_id: 'AP-2', plan_hash: 'red' });
 });
 
-test('only finite downlinked SOC from fleet messages becomes observed chart points', () => {
-  let state = createFlightState();
-  for (const [t, soc] of [[100, null], [110, .48], [120, null], [130, .43]]) {
-    state = reduceFlight(state, { type: 'fleet_state', data: {
-      t, sats: [{ sat_id: 'SAT-07', soc }],
-    } });
-  }
+test('only finite SOC from get_telemetry tool results becomes observed chart points', () => {
+  let state = reduceFlight(createFlightState(), { type: 'fleet_state', data: {
+    t: 100, sats: [{ sat_id: 'SAT-07', soc: .48 }],
+  } });
+  assert.deepEqual(state.telemetry, {});
+  state = reduceFlight(state, { type: 'trace_event', data: {
+    kind: 'tool_result', payload: { name: 'get_telemetry', result: {
+      sat_id: 'SAT-07', t: [100, 110, 120, 130], channels: { soc: [null, .48, null, .43] },
+    } },
+  } });
   assert.deepEqual(state.telemetry['SAT-07'], [{ t: 110, soc: .48 }, { t: 130, soc: .43 }]);
   assert.deepEqual(observedPoints({ t: [100, 120] }, state.telemetry['SAT-07']),
     [{ t: 110, soc: .48 }]);

@@ -25,15 +25,14 @@ export function reduceFlight(state, message) {
   if (message.type === 'reveal') {
     return { ...state, reveals: { ...state.reveals, [data.sat_id]: data } };
   }
-  if (message.type === 'fleet_state') {
-    const telemetry = { ...state.telemetry };
-    for (const sat of data.sats ?? []) {
-      if (!Number.isFinite(sat.soc)) continue;
-      const previous = telemetry[sat.sat_id] ?? [];
-      if (previous.at(-1)?.t === data.t) continue;
-      telemetry[sat.sat_id] = [...previous, { t: data.t, soc: sat.soc }].slice(-2000);
-    }
-    return { ...state, telemetry };
+  if (message.type === 'trace_event' && data.kind === 'tool_result'
+    && data.payload?.name === 'get_telemetry') {
+    const result = data.payload.result;
+    if (!result?.sat_id || !Array.isArray(result.t) || !Array.isArray(result.channels?.soc)) return state;
+    const points = result.t.flatMap((t, index) =>
+      Number.isFinite(t) && Number.isFinite(result.channels.soc[index])
+        ? [{ t, soc: result.channels.soc[index] }] : []);
+    return { ...state, telemetry: { ...state.telemetry, [result.sat_id]: points } };
   }
   return state;
 }

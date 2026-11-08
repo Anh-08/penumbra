@@ -1,3 +1,4 @@
+import json
 import time
 from threading import Event
 
@@ -30,6 +31,17 @@ def test_every_websocket_message_has_a_contract_schema():
             pass
         else:
             raise AssertionError(f'{kind} accepted an invalid payload')
+
+
+def test_trace_telemetry_nonfinite_channels_become_json_null():
+    sample = MockProvider(t0=1_800_000_000.0).sample_messages()['trace_event']
+    sample['kind'] = 'tool_result'
+    sample['payload'] = {'name': 'get_telemetry', 'result': {
+        'sat_id': 'SAT-07', 't': [100, 110], 'channels': {'soc': [.48, float('nan')]},
+    }}
+    message = validate_message('trace_event', sample)
+    assert message['data']['payload']['result']['channels']['soc'] == [.48, None]
+    json.dumps(message, allow_nan=False)
 
 
 def test_all_rest_routes_exist_and_validate_request_bodies():
