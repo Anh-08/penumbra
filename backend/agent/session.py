@@ -52,8 +52,10 @@ def new_run_id(kind: str, now: float | None = None) -> str:
     return f"{kind}-{stamp}-{secrets.token_hex(3)}"
 
 
-class _Tee:
-    """Recorder that writes through to the flight recorder, then hands the event to a callback."""
+class TeeRecorder:
+    """Recorder that writes through to another recorder (e.g. a FlightRecorder), then hands each event to a
+    callback, e.g. the API broadcasting it as `trace_event`. Any driver can wrap its recorder with it:
+    `run_agent(model, dispatcher, TeeRecorder(flight, on_event))`."""
 
     def __init__(self, inner: Any, on_event: Callable[[Any], None]) -> None:
         self._inner = inner
@@ -80,6 +82,6 @@ def record_run(
     run_id = run_id or new_run_id(model_kind(model))
     path = Path(runs_dir) / f"{run_id}.jsonl"
     with FlightRecorder(run_id, path=path) as flight:
-        recorder = _Tee(flight, on_event) if on_event is not None else flight
+        recorder = TeeRecorder(flight, on_event) if on_event is not None else flight
         run = run_fleet(model, dispatcher, recorder) if fleet else run_agent(model, dispatcher, recorder, goal=goal)
     return RecordedRun(run=run, run_id=run_id, path=path)
