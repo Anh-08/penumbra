@@ -1,17 +1,17 @@
 <p align="center"><img src="docs/media/banner.png" alt="Penumbra: verified AI mission ops for a 24-satellite LEO fleet. AI proposes, physics verifies, humans approve." width="100%"></p>
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=QapdEbnx69w"><img src="https://img.shields.io/badge/WATCH_THE_DEMO-2%3A38-FF0000?style=for-the-badge&logo=youtube&logoColor=white&labelColor=555555" alt="Watch the demo on YouTube, 2:38"></a>
-  <a href="https://devpost.com/software/penumbra-sp4gtd"><img src="https://img.shields.io/badge/READ_ON-DEVPOST-003E54?style=for-the-badge&logo=devpost&logoColor=white&labelColor=555555" alt="Read the project on Devpost"></a>
-  <a href="https://bullsinorbit.study/"><img src="https://img.shields.io/badge/LIVE_DEMO-BULLSINORBIT.STUDY-008A8A?style=for-the-badge&logo=godaddy&logoColor=white&labelColor=555555" alt="Live demo at bullsinorbit.study"></a>
+  <a href="https://www.youtube.com/watch?v=QapdEbnx69w"><img src="docs/media/badges/youtube.svg" alt="Watch the demo on YouTube, 2:38"></a>
+  <a href="https://devpost.com/software/penumbra-sp4gtd"><img src="docs/media/badges/devpost.svg" alt="Read the project on Devpost"></a>
+  <a href="https://bullsinorbit.study/"><img src="docs/media/badges/live-demo.svg" alt="Live demo at bullsinorbit.study"></a>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Gemini-agent_and_voice-8E75B2?logo=googlegemini&logoColor=white" alt="Gemini: agent and voice commands">
-  <img src="https://img.shields.io/badge/ElevenLabs-voice_callouts-000000?logo=elevenlabs&logoColor=white" alt="ElevenLabs: voice callouts">
-  <img src="https://img.shields.io/badge/Vultr-public_demo-007BFC?logo=vultr&logoColor=white" alt="Vultr: public demo">
-  <img src="https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white" alt="Python 3.11">
-  <img src="https://img.shields.io/badge/UB_Hacking-2026-0B111A" alt="UB Hacking 2026">
+  <img src="docs/media/badges/gemini.svg" alt="Gemini: agent and voice commands">
+  <img src="docs/media/badges/elevenlabs.svg" alt="ElevenLabs: voice callouts">
+  <img src="docs/media/badges/vultr.svg" alt="Vultr: public demo">
+  <img src="docs/media/badges/python.svg" alt="Python 3.11">
+  <img src="docs/media/badges/ub-hacking.svg" alt="UB Hacking 2026">
 </p>
 
 <p align="center"><b>
