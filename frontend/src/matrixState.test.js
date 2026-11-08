@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { cellPasses, createMatrixState, rankedPlanId, reduceMatrix, scheduleConflicts } from './matrixState.js';
+import { cellPasses, createMatrixState, rankedPlanId, reduceMatrix, scheduleConflicts,
+  worstPlausibleHypothesis } from './matrixState.js';
 
 const result = (plan_id, min_soc_p5, pass_rate) => ({
   sim_id: `S-${plan_id.slice(2)}`, plan_id, plan_hash: `${plan_id}-hash`,
@@ -36,6 +37,14 @@ test('cell color uses the backend pass-rate threshold, while the plan verdict re
   const backendResult = { ...result('P-4', .35, .95), passes_all: false };
   assert.equal(cellPasses(backendResult.per_hyp.H2), true);
   assert.equal(backendResult.passes_all, false);
+});
+
+test('chart labels the worst plausible backend hypothesis for the ranked plan', () => {
+  const ranked = result('P-1', .31, 1);
+  ranked.per_hyp.H3 = { ...ranked.per_hyp.H2, min_soc_p5: .18 };
+  ranked.per_hyp.H5 = { ...ranked.per_hyp.H2, min_soc_p5: .05 };
+  ranked.plausible = ['H2', 'H3'];
+  assert.equal(worstPlausibleHypothesis(ranked), 'H3');
 });
 
 test('infeasible comes only from fleet_state safe_mode_recommended', () => {

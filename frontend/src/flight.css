@@ -1,0 +1,20 @@
+.soc-chart { min-height: 0; height: 100%; display: flex; flex-direction: column; color: var(--c-ink); }
+.chart-heading { display: flex; justify-content: space-between; align-items: center; height: 24px; flex: 0 0 24px; font: 600 var(--fs-label) var(--font-cond); letter-spacing: var(--track-label); }
+.soc-chart svg { width: 100%; min-height: 0; flex: 1; overflow: visible; }
+.chart-axis { stroke: var(--c-line-strong); stroke-width: 1; }.chart-tick { fill: var(--c-ink-3); font: 15px var(--font-data); }
+.chart-band { fill: var(--c-band); }.chart-median { fill: none; stroke: var(--c-ink-2); stroke-width: 1.5; }
+.chart-min { stroke: var(--c-refused); stroke-width: 2; stroke-dasharray: 6 5; }.chart-min-label { fill: var(--c-refused); font: 600 13px var(--font-cond); }
+.chart-observation { fill: var(--c-truth); }.chart-truth { fill: none; stroke: var(--c-truth); stroke-width: 2; stroke-dasharray: 1600; animation: truth-draw var(--dur-draw) linear both; }
+@keyframes truth-draw { from { stroke-dashoffset: 1600; } to { stroke-dashoffset: 0; } }
+.chart-key { flex: 0 0 18px; display: flex; gap: var(--sp-4); color: var(--c-ink-3); font: 500 var(--fs-label) var(--font-cond); }
+.chart-empty { display: grid; place-items: center; height: 100%; color: var(--c-ink-3); font: 500 var(--fs-label) var(--font-cond); }
+.flight-overlay { z-index: var(--z-overlay); top: 280px; right: var(--inset); width: 1000px; height: 600px; padding: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-4); }
+.flight-heading { display: flex; align-items: baseline; gap: var(--sp-4); height: 40px; flex: 0 0 40px; }.flight-heading strong { font: 600 var(--fs-2m) var(--font-cond); }.flight-heading span { font: 500 var(--fs-body) var(--font-cond); color: var(--c-ink-2); }
+.flight-caption { color: var(--c-ink-2); font: 500 var(--fs-body) var(--font-cond); }
+.flight-overlay .soc-chart { flex: 1; }
+.reveal-columns { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); min-height: 160px; }
+.reveal-columns > div { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); background: var(--c-raise); border: 1px solid var(--c-line-strong); }
+.reveal-columns span { color: var(--c-ink-3); font: 600 var(--fs-label) var(--font-cond); letter-spacing: var(--track-label); }.reveal-columns strong { font: 600 var(--fs-2m) var(--font-cond); }.reveal-columns small { color: var(--c-ink-2); font: 500 var(--fs-label) var(--font-data); }
+@media (max-width: 1599px), (max-height: 950px) { .flight-overlay { top: 212px; width: 712px; height: 420px; padding: var(--sp-4); gap: var(--sp-2); }.flight-heading { height: 30px; flex-basis: 30px; }.reveal-columns { min-height: 110px; }.reveal-columns > div { padding: var(--sp-2); gap: var(--sp-1); }.reveal-columns strong { font-size: var(--fs-title); }.chart-heading { height: 18px; flex-basis: 18px; }.chart-tick { font-size: 12px; } }
+@media (max-width: 1100px) { .flight-overlay { position: relative; top: auto; right: auto; width: calc(100% - 24px); height: 420px; margin: 60vh 12px 12px; }.reveal-columns { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .chart-truth { animation: none; } }

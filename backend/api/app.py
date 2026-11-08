@@ -54,27 +54,72 @@ class RevealRequest(BaseModel):
     sat_id: SatId
 
 
-def create_app(provider: MockProvider | None = None) -> FastAPI:
+def create_app(provider: Any | None = None) -> FastAPI:
     app = FastAPI(title="Penumbra API", version="0.1.0")
     source = provider if provider is not None else select_provider()
     t0 = getattr(source, "t0", datetime.now(timezone.utc).timestamp())
     clock = SimClock(t0=t0)
     listeners: set[asyncio.Queue[dict[str, Any]]] = set()
+    app.state.loop = None
     app.state.provider = source
     app.state.clock = clock
+    app.state.scenario_task = None
 
-    def publish(kind: str, payload: Any) -> None:
-        message = validate_message(kind, payload)
+    def scenario_ready() -> bool:
+        task = app.state.scenario_task
+        return task is None or (task.done() and task.exception() is None)
+
+    def enqueue(message: dict[str, Any]) -> None:
         for listener in tuple(listeners):
             if listener.full():
                 listener.get_nowait()
             listener.put_nowait(message)
+
+    async def after_matrix(message: dict[str, Any]) -> None:
+        results = message["data"]["results"]
+        ticket_for = getattr(source, "operator_ticket", None)
+        trajectory_for = getattr(source, "trajectory", None)
+
+        def compute() -> tuple[list[Any], Any | None]:
+            tickets = [ticket_for(result["plan_id"]) for result in results] if ticket_for else []
+            trajectory = None
+            if results and trajectory_for:
+                best = results[0]
+                plausible = [hyp for hyp in best["plausible"] if hyp in best["per_hyp"]]
+                if plausible:
+                    worst = min(plausible, key=lambda hyp: best["per_hyp"][hyp]["min_soc_p5"])
+                    trajectory = trajectory_for(best["plan_id"], worst)
+            return tickets, trajectory
+
+        tickets, trajectory = await asyncio.to_thread(compute)
+        for ticket in tickets:
+            publish("approval_request", ticket)
+        if trajectory is not None:
+            publish("trajectory", trajectory)
+
+    def publish(kind: str, payload: Any) -> None:
+        message = validate_message(kind, payload)
+        loop = app.state.loop
+        try:
+            running_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            running_loop = None
+        if loop is not None and running_loop is not loop:
+            loop.call_soon_threadsafe(enqueue, message)
+        else:
+            enqueue(message)
+        if kind == "matrix" and message["data"]["complete"] and loop is not None:
+            if running_loop is loop:
+                loop.create_task(after_matrix(message))
+            else:
+                loop.call_soon_threadsafe(lambda: loop.create_task(after_matrix(message)))
 
     app.state.publish = publish
 
     @app.websocket("/ws")
     async def websocket_fleet(websocket: WebSocket) -> None:
         await websocket.accept()
+        app.state.loop = asyncio.get_running_loop()
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=256)
         listeners.add(queue)
         next_fleet = time.monotonic()
@@ -82,8 +127,13 @@ def create_app(provider: MockProvider | None = None) -> FastAPI:
             while True:
                 now = time.monotonic()
                 if now >= next_fleet:
-                    state = source.fleet_state(clock.now(), clock.speed)
-                    await websocket.send_json(validate_message("fleet_state", state))
+                    if scenario_ready():
+                        state = await asyncio.to_thread(source.fleet_state, clock.now(), clock.speed)
+                        if state is not None:
+                            await websocket.send_json(validate_message("fleet_state", state))
+                        if hasattr(source, "drain_messages"):
+                            for event in source.drain_messages():
+                                publish(event["type"], event["data"])
                     next_fleet = now + FLEET_INTERVAL_S
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=max(0.0, next_fleet - time.monotonic()))
@@ -94,16 +144,33 @@ def create_app(provider: MockProvider | None = None) -> FastAPI:
             pass
         finally:
             listeners.discard(queue)
+            if not listeners:
+                app.state.loop = None
 
     @app.post("/api/scenario", response_model=ScenarioResponse)
     async def scenario(request: ScenarioRequest) -> ScenarioResponse:
+        if getattr(source, "background_scenario", False):
+            task = app.state.scenario_task
+            if task is not None and not task.done():
+                raise HTTPException(status_code=409, detail="scenario build already in progress")
+            clock.reset(t0)
+            app.state.scenario_task = asyncio.create_task(
+                asyncio.to_thread(source.set_scenario, request.name, request.seed))
+            return ScenarioResponse(name=request.name, seed=request.seed, t=clock.now(), status="building")
         source.set_scenario(request.name, request.seed)
         clock.reset(t0)
         return ScenarioResponse(name=request.name, seed=request.seed, t=clock.now(), status="ready")
 
     @app.post("/api/fault-storm", response_model=StormResponse)
     async def fault_storm() -> StormResponse:
-        alerts = source.storm_alerts(clock.now())
+        if not scenario_ready():
+            raise HTTPException(status_code=503, detail="scenario is not ready")
+        alerts = await asyncio.to_thread(source.storm_alerts, clock.now())
+        if hasattr(source, "drain_messages"):
+            events = source.drain_messages()
+            for event in events:
+                publish(event["type"], event["data"])
+            return StormResponse(started=True, alert_count=sum(event["type"] == "alert" for event in events))
         for alert in alerts:
             publish("alert", alert)
             if alert.severity in ("warning", "critical"):
@@ -120,7 +187,7 @@ def create_app(provider: MockProvider | None = None) -> FastAPI:
 
     @app.post("/api/approve", response_model=ApprovalRefused | ExecutionMsg)
     async def approve(request: ApproveRequest) -> ApprovalRefused | ExecutionMsg:
-        result = source.approve(request.approval_id, request.plan_hash)
+        result = await asyncio.to_thread(source.approve, request.approval_id, request.plan_hash)
         if isinstance(result, ApprovalRefused):
             publish("approval_refused", ApprovalRefusedMsg(
                 approval_id=request.approval_id,
@@ -149,7 +216,7 @@ def create_app(provider: MockProvider | None = None) -> FastAPI:
 
     @app.post("/api/reveal", response_model=RevealMsg)
     async def reveal(request: RevealRequest) -> RevealMsg:
-        result = source.reveal(request.sat_id)
+        result = await asyncio.to_thread(source.reveal, request.sat_id)
         if result is None:
             raise HTTPException(status_code=409, detail="truth can be revealed only after execution")
         message = RevealMsg.model_validate(result)

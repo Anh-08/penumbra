@@ -1,13 +1,16 @@
+import json
 import time
+from threading import Event
 
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from contracts import WS_MESSAGE_TYPES
+from contracts import ExecutionMsg, WS_MESSAGE_TYPES
 from backend.api.app import create_app
 from backend.api.clock import SimClock
 from backend.api.messages import WS_SCHEMAS, validate_message
 from backend.api.providers import MockProvider, select_provider
+from backend.api.real_provider import RealProvider
 
 
 def client():
@@ -28,6 +31,17 @@ def test_every_websocket_message_has_a_contract_schema():
             pass
         else:
             raise AssertionError(f'{kind} accepted an invalid payload')
+
+
+def test_trace_telemetry_nonfinite_channels_become_json_null():
+    sample = MockProvider(t0=1_800_000_000.0).sample_messages()['trace_event']
+    sample['kind'] = 'tool_result'
+    sample['payload'] = {'name': 'get_telemetry', 'result': {
+        'sat_id': 'SAT-07', 't': [100, 110], 'channels': {'soc': [.48, float('nan')]},
+    }}
+    message = validate_message('trace_event', sample)
+    assert message['data']['payload']['result']['channels']['soc'] == [.48, None]
+    json.dumps(message, allow_nan=False)
 
 
 def test_all_rest_routes_exist_and_validate_request_bodies():
@@ -52,6 +66,108 @@ def test_all_rest_routes_exist_and_validate_request_bodies():
         assert api.post('/api/reveal', json={'sat_id': 'invalid'}).status_code == 422
 
 
+def test_approval_and_reveal_publish_contract_messages():
+    class ExecutingProvider(MockProvider):
+        def approve(self, approval_id, plan_hash):
+            self.executed.add('SAT-07')
+            return ExecutionMsg(plan_id='P-1', sat_id='SAT-07', status='executed', t=self.t0)
+
+    with TestClient(create_app(provider=ExecutingProvider(t0=1_800_000_000.0))) as api:
+        with api.websocket_connect('/ws') as ws:
+            assert ws.receive_json()['type'] == 'fleet_state'
+            response = api.post('/api/approve', json={'approval_id': 'AP-1', 'plan_hash': 'verified-hash'})
+            assert response.status_code == 200
+            assert response.json()['status'] == 'executed'
+            assert ws.receive_json()['type'] == 'execution'
+            revealed = api.post('/api/reveal', json={'sat_id': 'SAT-07'})
+            assert revealed.status_code == 200
+            assert revealed.json()['truth']['kind'] == 'stuck_on_load'
+            assert ws.receive_json()['type'] == 'reveal'
+
+
+def test_slow_scenario_build_returns_without_blocking_api_startup():
+    release = Event()
+
+    class SlowProvider(MockProvider):
+        background_scenario = True
+
+        def set_scenario(self, name, seed):
+            assert release.wait(2)
+            super().set_scenario(name, seed)
+
+    with TestClient(create_app(provider=SlowProvider(t0=1_800_000_000.0))) as api:
+        start = time.monotonic()
+        response = api.post('/api/scenario', json={'name': 'fault-storm', 'seed': 7})
+        assert response.json()['status'] == 'building'
+        assert time.monotonic() - start < .5
+        assert api.post('/api/fault-storm').status_code == 503
+        release.set()
+        for _ in range(20):
+            if api.app.state.scenario_task.done():
+                break
+            time.sleep(.01)
+        assert api.app.state.scenario_task.done()
+        assert api.post('/api/fault-storm').status_code == 200
+
+
+def test_complete_matrix_emits_one_operator_ticket_per_simulated_plan():
+    class TicketProvider(MockProvider):
+        trajectory_calls = []
+
+        def operator_ticket(self, plan_id):
+            return {
+                'approval_id': f'AP-{plan_id[2:]}', 'plan_id': plan_id,
+                'plan_hash': 'sample-hash', 'sat_id': 'SAT-07', 'tier': 2, 'sim_id': 'S-1',
+            }
+
+        def trajectory(self, plan_id, hypothesis):
+            self.trajectory_calls.append((plan_id, hypothesis))
+            return self.sample_messages()['trajectory']
+
+    app = create_app(provider=TicketProvider(t0=1_800_000_000.0))
+    with TestClient(app) as api:
+        with api.websocket_connect('/ws') as ws:
+            assert ws.receive_json()['type'] == 'fleet_state'
+            matrix = api.app.state.provider.sample_messages()['matrix']
+            first = matrix['results'][0]
+            first['per_hyp']['H3'] = {**first['per_hyp']['H2'], 'min_soc_p5': .11}
+            first['plausible'].append('H3')
+            matrix['complete'] = True
+            api.app.state.publish('matrix', matrix)
+            assert ws.receive_json()['type'] == 'matrix'
+            ticket = ws.receive_json()
+            assert ticket['type'] == 'approval_request'
+            assert ticket['data']['plan_id'] == 'P-1'
+            assert ws.receive_json()['type'] == 'trajectory'
+            assert api.app.state.provider.trajectory_calls == [('P-1', 'H3')]
+
+
+def test_real_detector_alert_and_callout_use_its_messages_without_duplicates():
+    class DetectorProvider(MockProvider):
+        def storm_alerts(self, t):
+            self.pending = [
+                {'type': 'alert', 'data': self.storm_alerts_sample(t)},
+                {'type': 'callout', 'data': {'text': 'SAT-07 requires attention', 'priority': 2}},
+            ]
+            return []
+
+        def storm_alerts_sample(self, t):
+            return MockProvider.storm_alerts(self, t)[0].model_dump(mode='json')
+
+        def drain_messages(self):
+            events = getattr(self, 'pending', [])
+            self.pending = []
+            return events
+
+    app = create_app(provider=DetectorProvider(t0=1_800_000_000.0))
+    with TestClient(app) as api:
+        with api.websocket_connect('/ws') as ws:
+            assert ws.receive_json()['type'] == 'fleet_state'
+            response = api.post('/api/fault-storm')
+            assert response.json()['alert_count'] == 1
+            assert [ws.receive_json()['type'], ws.receive_json()['type']] == ['alert', 'callout']
+
+
 def test_clock_runs_at_requested_speed_and_rejects_out_of_range():
     with client() as api:
         assert api.post('/api/clock', json={'speed': 1}).json()['speed'] == 1
@@ -73,8 +189,10 @@ def test_websocket_streams_fleet_state_at_one_to_two_hertz():
             assert second['data']['t'] > first['data']['t']
 
 
-def test_provider_import_switch_defaults_to_mock(monkeypatch):
+def test_provider_import_switch_defaults_to_real_and_keeps_explicit_mock(monkeypatch):
     monkeypatch.delenv('PENUMBRA_API_PROVIDER', raising=False)
+    assert isinstance(select_provider(), RealProvider)
+    monkeypatch.setenv('PENUMBRA_API_PROVIDER', 'mock')
     assert isinstance(select_provider(), MockProvider)
     monkeypatch.setenv('PENUMBRA_API_PROVIDER', 'unknown')
     try:

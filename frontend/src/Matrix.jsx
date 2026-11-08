@@ -1,4 +1,5 @@
 import { cellPasses, rankedPlanId } from './matrixState.js';
+import { SocChart } from './SocChart.jsx';
 
 const HYPOTHESES = ['H0', 'H1', 'H2', 'H3', 'H4', 'H5'];
 
@@ -6,17 +7,17 @@ function percent(value) {
   return Number.isFinite(value) ? `${Math.round(value * 100)}%` : '—';
 }
 
-function MatrixCell({ result, hypothesis, plausible, fresh, rowIndex }) {
+function MatrixCell({ result, hypothesis, plausible, fresh, rowIndex, refused }) {
   const stats = result.per_hyp?.[hypothesis];
   if (!stats) return <div className="matrix-cell pending" role="cell">—</div>;
   const ruledOut = !plausible.has(hypothesis);
   const passed = cellPasses(stats);
   return <div
-    className={`matrix-cell ${ruledOut ? 'ruled-out' : passed ? 'passed' : 'failed'} ${fresh ? 'arriving' : ''}`}
+    className={`matrix-cell ${ruledOut ? 'ruled-out' : passed ? 'passed' : 'failed'} ${fresh ? 'arriving' : ''} ${refused ? 'refused' : ''}`}
     style={{ '--cell-index': rowIndex }}
     role="cell"
   >
-    <strong>{ruledOut ? 'RULED OUT' : passed ? 'PASS' : 'FAILS'}</strong>
+    <strong>{refused ? 'REFUSED' : ruledOut ? 'RULED OUT' : passed ? 'PASS' : 'FAILS'}</strong>
     <span className="num" title="Minimum state of charge, fifth percentile">SOC {percent(stats.min_soc_p5)}</span>
     <small className="num" title="Monte Carlo pass rate">MC {percent(stats.pass_rate)}</small>
   </div>;
@@ -42,7 +43,8 @@ function ScheduleConflict({ conflict }) {
   </section>;
 }
 
-export function MatrixOverlay({ satId, matrix, hypotheses, conflict, status, selectedPlanId, onSelectPlan }) {
+export function MatrixOverlay({ satId, matrix, hypotheses, conflict, status, selectedPlanId,
+  onSelectPlan, failingHypotheses, trajectory, telemetry, socMin, chartPlanId, chartHypothesis }) {
   if (!matrix?.results.length) return null;
   const plans = matrix.results;
   const plausible = new Set(hypotheses?.plausible ?? plans[0].plausible ?? []);
@@ -78,7 +80,8 @@ export function MatrixOverlay({ satId, matrix, hypotheses, conflict, status, sel
           </div>
           {plans.map((result) => <MatrixCell key={result.plan_id}
             result={result} hypothesis={hypothesis} plausible={plausible}
-            fresh={matrix.freshPlanId === result.plan_id} rowIndex={rowIndex} />)}
+            fresh={matrix.freshPlanId === result.plan_id} rowIndex={rowIndex}
+            refused={selectedPlanId === result.plan_id && failingHypotheses?.includes(hypothesis)} />)}
         </div>)}
       </div>
     </div>
@@ -88,9 +91,8 @@ export function MatrixOverlay({ satId, matrix, hypotheses, conflict, status, sel
     </div>
     <div className="matrix-lower">
       <ScheduleConflict conflict={conflict} />
-      {!conflict && <div className="trajectory-reserved">
-        <span>TRAJECTORY</span><span>Awaiting verifier data</span>
-      </div>}
+      <SocChart trajectory={trajectory} telemetry={telemetry} socMin={socMin}
+        planId={chartPlanId} hypothesis={chartHypothesis} />
     </div>
   </section>;
 }

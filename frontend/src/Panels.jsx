@@ -1,4 +1,5 @@
 import { formatCountdown, formatDuration } from './panelState.js';
+import { hashPrefix } from './flightState.js';
 
 const HYPOTHESES = ['H0', 'H1', 'H2', 'H3', 'H4', 'H5'];
 
@@ -104,18 +105,42 @@ export function ProvenanceLegend({ localPreview }) {
 export function TopBar({ phase, mode, time, speed, hasVerification }) {
   const activeStage = phase === 'approval' || phase === 'fastforward' || phase === 'reveal'
     ? 2 : hasVerification ? 1 : 0;
+  const complete = phase === 'fastforward' || phase === 'reveal';
   return <header className="top-bar">
     <div className="top-brand"><strong>PENUMBRA</strong><span>24-SATELLITE MISSION CONTROL</span></div>
     <div className="stage-stepper" aria-label="AI proposes, physics verifies, humans approve">
-      {['AI PROPOSES', 'PHYSICS VERIFIES', 'HUMAN APPROVES'].map((label, index) => <div className={`stage ${activeStage === index ? 'active' : ''}`} key={label}>{label}</div>)}
+      {['AI PROPOSES', 'PHYSICS VERIFIES', 'HUMAN APPROVES'].map((label, index) => <div className={`stage ${complete ? 'done' : activeStage === index ? 'active' : ''}`} key={label}>{label}</div>)}
     </div>
     <div className="top-status"><span className="mode-chip">{mode}</span><time className="num">{timeLabel(time)} UTC</time><span className="speed-chip num">{speed === 0 ? 'PAUSED' : `${speed}×`}</span></div>
   </header>;
 }
 
-export function DirectorSlot() {
+export function DirectorSlot({ phase, approval, result, refusal, execution, pending, error,
+  onApprove, onReveal }) {
+  const executed = execution?.plan_id === approval?.plan_id;
+  const canReveal = phase === 'reveal' && executed;
+  const failed = result?.passes_all === false;
+  const currentHash = approval?.plan_hash === result?.plan_hash;
   return <section className="hud-panel director-slot" aria-label="Flight Director">
     <PanelHeading source="HUMAN">FLIGHT DIRECTOR</PanelHeading>
-    <div className="director-wait">Waiting for a verified plan</div>
+    {canReveal ? <button className="director-action reveal" onClick={onReveal} disabled={pending}>
+      {pending ? 'REVEALING…' : 'REVEAL TRUTH'}
+    </button> : executed ? <div className="director-executed">EXECUTED · {execution.plan_id}
+      {phase === 'fastforward' && <small>Following the next eclipse at 600×</small>}
+    </div> : approval && result ? <>
+      <div className="director-tier">TIER {approval.tier} · {approval.tier === 2 ? 'HUMAN REQUIRED' : 'FLIGHT RULE'}</div>
+      <button className={`director-action ${failed ? 'failed' : 'verified'}`}
+        onClick={onApprove} disabled={pending || !currentHash}>
+        <span>{pending ? 'CHECKING…' : `APPROVE ${result.plan_id}`}</span>
+        <small>TIER {approval.tier} · HASH {hashPrefix(result.plan_hash)}</small>
+        {failed && <small>FAILED VERIFICATION · PHYSICS WILL VETO</small>}
+      </button>
+      <div className="director-hash num">{approval.approval_id} · exact verified plan hash</div>
+    </> : <div className="director-wait">Waiting for a verified plan</div>}
+    {refusal && <div className="director-refusal" role="alert">
+      <strong>REFUSED · PHYSICS VETO</strong>
+      <span>{refusal.reason_key.replaceAll('_', ' ')} · {refusal.failing_hypotheses.join(', ') || 'No failing hypotheses reported'} · No override exists.</span>
+    </div>}
+    {error && <div className="director-error" role="alert">{error}</div>}
   </section>;
 }

@@ -6,6 +6,15 @@ export function rankedPlanId(matrix) {
   return matrix?.complete ? matrix.results[0]?.plan_id ?? null : null;
 }
 
+export function worstPlausibleHypothesis(result) {
+  const plausible = result?.plausible?.filter((hypothesis) =>
+    Number.isFinite(result.per_hyp?.[hypothesis]?.min_soc_p5)) ?? [];
+  return plausible.length
+    ? plausible.reduce((worst, hypothesis) => result.per_hyp[hypothesis].min_soc_p5
+      < result.per_hyp[worst].min_soc_p5 ? hypothesis : worst)
+    : null;
+}
+
 export function cellPasses(stats) {
   return stats?.pass_rate >= 0.95;
 }
