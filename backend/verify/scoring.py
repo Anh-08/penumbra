@@ -138,14 +138,19 @@ class SatEvidence:
     def ll_with_onset(self, h: str, tau: float) -> np.ndarray:
         """Log-likelihood per candidate of `h` when the fault starts at time tau (nominal before).
 
-        The segment containing tau counts as faulty. Returns (Kh,); empty evidence gives zeros.
+        The segment containing tau straddles the onset, so it is averaged over "already faulty" and
+        "still nominal". Returns (Kh,); empty evidence gives zeros.
         """
         ks = [k for k, c in enumerate(self.candidates) if c.hyp == h]
         j_n = self.seg_ll.shape[0]
         if j_n == 0:
             return np.zeros(len(ks))
+        nominal = self._nominal_per_segment()
         j0 = int(np.clip(np.searchsorted(self.seg_t, tau, side="right") - 1, 0, j_n - 1))
-        return self._nominal_per_segment()[:j0].sum() + self.seg_ll[j0:, ks].sum(axis=0)
+        opts = [nominal[:j].sum() + self.seg_ll[j:, ks].sum(axis=0) for j in sorted({j0, min(j0 + 1, j_n - 1)})]
+        x = np.stack(opts)
+        m = x.max(axis=0)
+        return m + np.log(np.mean(np.exp(x - m), axis=0))
 
     def _nominal_per_segment(self) -> np.ndarray:
         """(J,) nominal log-likelihood per segment, averaged over the H0 tolerance grid."""

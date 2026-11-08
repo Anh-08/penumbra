@@ -146,11 +146,84 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--run-id")
     ap.add_argument("--runs-dir", default="runs/demo")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--scenario", default="single-stuck-load", choices=["single-stuck-load", "fault-storm"])
     args = ap.parse_args(argv)
+    if args.scenario == "fault-storm":
+        res = run_storm(select_model(live=args.live), run_id=args.run_id, runs_dir=args.runs_dir, seed=args.seed)
+        res.pop("backend")
+        print(json.dumps(res, indent=1, default=str))
+        return
     res = run(select_model(live=args.live), run_id=args.run_id, runs_dir=args.runs_dir, seed=args.seed)
     out = res.summary()
     out["soc_min_limit"] = K.SOC_MIN
     print(json.dumps(out, indent=1, default=str))
+
+
+
+# ----------------------------------------------------------------------------- fault storm (T27)
+STORM_SATS = ("SAT-12", "SAT-07", "SAT-19")
+
+
+class _Focus:
+    """The backend as one agent run sees it: triage shows only the satellite being worked."""
+
+    def __init__(self, backend: FleetBackend, sat_id: str) -> None:
+        self._b, self._sat = backend, sat_id
+
+    def __getattr__(self, name):
+        return getattr(self._b, name)
+
+    def triage(self):
+        return [e for e in self._b.triage() if e.sat_id == self._sat]
+
+
+def run_storm(model=None, *, run_id: str | None = None, runs_dir: str | Path = "runs/demo", seed: int = 0,
+              sat_ids: tuple[str, ...] = SAT_IDS, step_s: float = 60.0) -> dict:
+    """fault-storm: each storm satellite is worked when its alert comes, in alert order (the clock stops
+    while the agent works). Returns {sat_id: outcome} plus the run id and path."""
+    sc = scenarios.build("fault-storm", seed=seed, sat_ids=sat_ids)
+    backend = FleetBackend(sc)
+    model = model or select_model(live=False)
+    run_id = run_id or new_run_id(model_kind(model))
+    path = Path(runs_dir) / f"{run_id}.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    outcomes: dict[str, dict] = {}
+    end = float(sc.env.t[-1])
+    with FlightRecorder(run_id, path=path) as flight:
+        t = backend.now()
+        while len(outcomes) < len(STORM_SATS) and t < end:
+            t = min(t + step_s, end)
+            backend.advance_to(t)
+            for m in backend.detector.drain_messages():
+                if m["type"] == "alert":
+                    flight.record("alert", m["data"].model_dump(mode="json"))
+            alerted = {e.sat_id: e for e in backend.triage()}
+            todo = [s for s in [e.sat_id for e in backend.triage()] if s in STORM_SATS and s not in outcomes]
+            for sat in todo:
+                if alerted[sat].severity not in ("warning", "critical"):
+                    continue
+                dispatcher = Dispatcher(_Focus(backend, sat))
+                agent = run_agent(model, dispatcher, flight)
+                out = {"t": backend.now(), "status": agent.status, "steps": agent.steps,
+                       "rendered_text": agent.rendered_text, "tier": None, "flight_rule": None, "executed": False}
+                tickets = list(dispatcher.approvals.values())
+                if tickets:
+                    ticket = tickets[-1]
+                    out.update(tier=ticket.tier, plan_id=ticket.plan_id, plan_hash=ticket.plan_hash)
+                    if ticket.tier == 1:
+                        out.update(executed=True, flight_rule=dispatcher._flight_rules.get(ticket.approval_id))
+                    else:
+                        res = dispatcher.approve(ticket.approval_id, ticket.plan_hash, flight)
+                        if not isinstance(res, ApprovalRefused):
+                            dispatcher.execute(ticket.approval_id, flight)
+                            out["executed"] = True
+                rank = backend.rank(sat)
+                if rank.status == "infeasible" and not out["executed"]:
+                    backend.mark(sat, "safe_mode_recommended")
+                out["rank_status"] = rank.status
+                out["triage_status"] = next((e.status for e in backend.triage() if e.sat_id == sat), None)
+                outcomes[sat] = out
+    return {"run_id": run_id, "path": str(path), "outcomes": outcomes, "data": DATA_NOTE, "backend": backend}
 
 
 if __name__ == "__main__":

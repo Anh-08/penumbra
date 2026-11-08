@@ -60,8 +60,9 @@ TRUTH: dict[str, Param] = {
     "v_shed_cell": Param(3.30, "V", "assumed: undervoltage load-shed threshold per cell (13.2 V pack)"),
     # ---- loads (W when on) ----
     "load_power": Param(
-        {"BUS": 7.0, "COMMS": 6.0, "ADCS": 6.0, "PAYLOAD": 30.0, "HEATER": 8.0, "AUX": 10.0}, "W",
-        "assumed: smallsat budget; PAYLOAD scales with duty, HEATER is thermostat-controlled"),
+        {"BUS": 7.0, "COMMS": 6.0, "ADCS": 6.0, "PAYLOAD": 30.0, "HEATER": 8.0, "AUX": 25.0}, "W",
+        "assumed: smallsat budget; PAYLOAD scales with duty, HEATER is thermostat-controlled, AUX is a "
+        "secondary payload / RF amplifier line, normally off"),
     "initial_on": Param({"PAYLOAD": True, "HEATER": True, "AUX": False}, "-",
                         "assumed: nominal ops; essential loads are always on"),
     "initial_payload_duty": Param(0.5, "-", "assumed"),
@@ -88,7 +89,7 @@ TRUTH: dict[str, Param] = {
         {
             "array_degradation": {"loss": (0.10, 0.60), "panel": ("PY", "MY", "ALL")},
             "stuck_on_load": {"load": ("AUX", "HEATER", "PAYLOAD")},
-            "capacity_fade": {"remaining": (0.45, 0.85)},
+            "capacity_fade": {"remaining": (0.30, 0.85)},
             "sensor_bias": {"channel": ("soc", "v_bus", "i_bat"),
                             "bias": {"soc": (0.05, 0.20), "v_bus": (0.2, 0.8), "i_bat": (0.2, 1.0)}},
             "beta_season": {"extra_beta_deg": (15.0, 40.0)},

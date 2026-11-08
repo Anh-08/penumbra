@@ -80,7 +80,8 @@ class FleetBackend:
         if latest is None or latest.sim_id != sim.sim_id:
             decision: tuple[int, str | None] = (2, None)   # only the verifier's own latest result counts
         else:
-            ctx = flight_rules.RuleContext(now=self.now(), commanded_duty=self._commanded_duty(plan.sat_id))
+            ctx = flight_rules.RuleContext(now=self.now(), commanded_duty=self._commanded_duty(plan.sat_id),
+                                           suspect_loads=self._suspect_loads(plan.sat_id, sim))
             decision = flight_rules.tier(plan, sim, ctx)
         self._tiers[plan.plan_id] = decision
         if decision[0] == 2:
@@ -153,6 +154,14 @@ class FleetBackend:
     def _set_status(self, sat_id: str, status: str) -> None:
         if self._status.get(sat_id) not in _FINAL or status in _FINAL:
             self._status[sat_id] = status
+
+    def _suspect_loads(self, sat_id: str, sim: SimResult) -> frozenset:
+        """Loads a plausible stuck-load hypothesis points at (MAP load of H2)."""
+        if "H2" not in sim.plausible:
+            return frozenset()
+        score = self._scores.get(sat_id) or self.detector.scores(sat_id)
+        load = (score.map_params.get("H2", {}) if score is not None else {}).get("load")
+        return frozenset({load}) if load else frozenset({"AUX", "HEATER", "PAYLOAD"})
 
     def _commanded_duty(self, sat_id: str) -> float:
         duty = float(self.scenario.initial.payload_duty[self.env.sat_ids.index(sat_id)])
