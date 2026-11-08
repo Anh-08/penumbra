@@ -105,10 +105,11 @@ export function ProvenanceLegend({ localPreview }) {
 export function TopBar({ phase, mode, time, speed, hasVerification }) {
   const activeStage = phase === 'approval' || phase === 'fastforward' || phase === 'reveal'
     ? 2 : hasVerification ? 1 : 0;
+  const complete = phase === 'fastforward' || phase === 'reveal';
   return <header className="top-bar">
     <div className="top-brand"><strong>PENUMBRA</strong><span>24-SATELLITE MISSION CONTROL</span></div>
     <div className="stage-stepper" aria-label="AI proposes, physics verifies, humans approve">
-      {['AI PROPOSES', 'PHYSICS VERIFIES', 'HUMAN APPROVES'].map((label, index) => <div className={`stage ${activeStage === index ? 'active' : ''}`} key={label}>{label}</div>)}
+      {['AI PROPOSES', 'PHYSICS VERIFIES', 'HUMAN APPROVES'].map((label, index) => <div className={`stage ${complete ? 'done' : activeStage === index ? 'active' : ''}`} key={label}>{label}</div>)}
     </div>
     <div className="top-status"><span className="mode-chip">{mode}</span><time className="num">{timeLabel(time)} UTC</time><span className="speed-chip num">{speed === 0 ? 'PAUSED' : `${speed}×`}</span></div>
   </header>;
