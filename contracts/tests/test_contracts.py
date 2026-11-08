@@ -29,7 +29,8 @@ def test_literals_match_constants():
     assert set(literal_values(c.LoadName)) == set(c.LOADS)
     assert literal_values(c.FaultKind) == c.FAULT_KINDS
     assert literal_values(c.Hypothesis) == c.HYPOTHESES
-    assert literal_values(c.CommandName) == c.COMMAND_NAMES
+    assert literal_values(c.CommandName) == c.ALL_COMMAND_NAMES
+    assert c.COMMAND_NAMES == ("LOAD_OFF", "LOAD_ON", "SET_PAYLOAD_DUTY", "SET_HEATER_SETPOINT", "SAFE_MODE")
     assert literal_values(c.StationId) == c.STATION_IDS
     assert literal_values(c.DemoState) == c.DEMO_STATES
     assert literal_values(c.RecorderKind) == c.RECORDER_KINDS
@@ -160,3 +161,59 @@ def test_narration_rejects_bare_digits(text):
 
 def test_placeholders():
     assert c.placeholders("a {S-1.passes_all} b {P-2.n_commands}") == ["S-1.passes_all", "P-2.n_commands"]
+
+
+# ---------------- T31: conjunctions and CAM_BURN ----------------
+
+def window(wid="W1", t0=T0, **kw):
+    base = dict(window_id=wid, t_start=t0, t_end=t0 + 600, dv_mps=0.05, burn_s=30, power_w=40, miss_after_km=2.0)
+    return c.ManeuverWindow(**{**base, **kw})
+
+
+def test_conjunction_model():
+    cj = c.Conjunction(conj_id="CJ-1", sat_id="SAT-09", object_id="DEB-01", tca=T0 + 4 * 3600, miss_km=0.3,
+                       windows=[window("W1"), window("W2", T0 + 3600), window("W3", T0 + 2 * 3600)])
+    assert cj.window("W2").t_start == T0 + 3600
+    assert c.Conjunction.model_validate_json(cj.model_dump_json()) == cj
+    with pytest.raises(ValidationError):                       # window too close to TCA
+        c.Conjunction(conj_id="CJ-2", sat_id="SAT-09", object_id="DEB-01", tca=T0 + 600 + c.CAM_LEAD_S - 1,
+                      miss_km=0.3, windows=[window("W1")])
+    with pytest.raises(ValidationError):                       # duplicate ids
+        c.Conjunction(conj_id="CJ-3", sat_id="SAT-09", object_id="DEB-01", tca=T0 + 9 * 3600, miss_km=0.3,
+                      windows=[window("W1"), window("W1", T0 + 3600)])
+    for bad in ({"conj_id": "C-1"}, {"object_id": "ISS"}, {"miss_km": -1.0}):
+        with pytest.raises(ValidationError):
+            c.Conjunction(**{**dict(conj_id="CJ-4", sat_id="SAT-09", object_id="DEB-01", tca=T0 + 9 * 3600,
+                                    miss_km=0.3, windows=[window()]), **bad})
+    with pytest.raises(ValidationError):
+        window(t_end=T0)
+
+
+def test_cam_burn_only_in_maneuver_plans():
+    burn = c.Command(t_exec=T0 + 60, name="CAM_BURN", args={"window_id": "W2"})
+    with pytest.raises(ValidationError):
+        c.Command(t_exec=T0, name="CAM_BURN", args={"window_id": "W4"})
+    with pytest.raises(ValidationError):
+        c.Command(t_exec=T0, name="CAM_BURN", args={"dv_mps": 0.1})   # the model never writes a delta-v
+    m = plan(kind="maneuver", commands=[burn, c.Command(t_exec=T0 + 60, name="LOAD_OFF", args={"load": "PAYLOAD"})])
+    assert m.plan_hash != plan(kind="maneuver", commands=[burn]).plan_hash
+    with pytest.raises(ValidationError):
+        plan(kind="plan", commands=[burn])
+    with pytest.raises(ValidationError):
+        plan(kind="maneuver", commands=[burn, burn])
+    with pytest.raises(ValidationError):
+        plan(kind="maneuver", commands=[c.Command(t_exec=T0 + 60, name="SAFE_MODE")])
+
+
+def test_t31_additions_leave_the_original_lists_alone():
+    assert c.AGENT_TOOLS == ("get_fleet_status", "get_telemetry", "score_hypotheses", "propose_diagnostic_test",
+                             "propose_plan", "simulate", "schedule_uplink", "request_approval")
+    assert c.AGENT_TOOLS_CAM == ("get_conjunctions",)
+    assert c.DEMO_SCENARIOS[:3] == ("single-stuck-load", "fault-storm", "beta-season")
+    assert c.DEMO_SCENARIOS[3] == "conjunction"
+    c.ScenarioRequest(name="conjunction", seed=0)
+
+
+def test_narration_allows_conjunction_ids_and_placeholders():
+    assert c.narration_ok("SAT-09 has CJ-1 with DEB-03; burn in W2, miss {CJ-1.miss_km} km.")
+    assert not c.narration_ok("miss is 300 m")

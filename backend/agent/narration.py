@@ -21,7 +21,8 @@ from contracts import ALLOWED_ID_RE, HYPOTHESES, PLACEHOLDER_RE, SAT_IDS, bare_d
 
 _BRACES_RE = re.compile(r"\{[^{}]*\}|[{}]")
 _BARE_TOKEN_RE = re.compile(r"\{\s*([A-Za-z][A-Za-z0-9_-]*)\s*\}")  # {P-2}, {H2}, {SVALBARD}: no field
-_TIME_FIELDS = {"t", "ts", "aos", "los", "t_exec", "start_t", "end_t", "onset_t", "next_contact_aos", "deadline_t"}
+_TIME_FIELDS = {"t", "ts", "aos", "los", "t_exec", "start_t", "end_t", "onset_t", "next_contact_aos", "deadline_t",
+                "tca", "t_start", "t_end"}
 _FRACTION_FIELDS = {"pass_rate", "payload_uptime", "payload_uptime_worst", "duty", "posterior"}
 
 
@@ -48,6 +49,7 @@ USABLE_FIELDS = {
     "P-n": ["n_commands", "station_id", "sat_id", "kind"],
     "AP-n": ["tier", "plan_id", "sat_id"],
     "AL-n": ["sat_id", "severity", "reason_key", "time_to_critical_min"],
+    "CJ-n": ["miss_km", "tca", "object_id"],
 }
 
 
@@ -95,6 +97,10 @@ def _id_exists(token: str, registry: Registry) -> bool:
         return True  # flight rules and task ids are not tracked by the agent
     if re.fullmatch(r"H\d", token):
         return token in HYPOTHESES
+    if re.fullmatch(r"W[1-3]", token):
+        return True  # maneuver window ids (T31), like flight rules
+    if token.startswith("DEB-"):  # simulated debris named by a conjunction the agent has seen
+        return any(cj.object_id == token for cj in getattr(registry, "conjunctions", {}).values())
     return registry.lookup(token) is not None
 
 
@@ -152,6 +158,12 @@ def format_value(field: str, value: Any) -> str:
         return f"{value * 100:.1f} %"
     if field.endswith("_min"):
         return f"{value:.0f} min"
+    if field.endswith("_km"):
+        return f"{value:.2f} km"
+    if field.endswith("_mps"):
+        return f"{value:.2f} m/s"
+    if field.endswith("_w"):
+        return f"{value:.0f} W"
     if isinstance(value, int):
         return str(value)
     return f"{value:.3g}"

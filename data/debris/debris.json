@@ -1,0 +1,23 @@
+[
+ {
+  "object_id": "DEB-01",
+  "epoch": 1794071520.0,
+  "r_km": [
+   4809.96926047629,
+   4214.175883606178,
+   2238.2905281866324
+  ],
+  "v_km_s": [
+   3.9639117133329953,
+   -5.981450545619665,
+   2.7189072327417327
+  ],
+  "simulated": true,
+  "note": "planted to pass SAT-17 (crossing 60.0 deg); windows W1 in SAT-17's second eclipse, W2 and W3 in sunlight (T31 conjunction scenario)",
+  "window_leads_s": [
+   11268,
+   7668,
+   2988
+  ]
+ }
+]
