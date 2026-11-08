@@ -97,12 +97,13 @@ export function TracePanel({ callout, rows, mode }) {
 
 export function ProvenanceLegend({ localPreview }) {
   return <section className="hud-panel provenance-legend" aria-label="Real and simulated data legend">
-    <div className="legend-line"><span className="legend-swatch real" /><strong>REAL</strong><span>Live orbits · Sun · stations · contacts</span></div>
+    <div className="legend-line"><span className="legend-swatch real" /><strong>REAL</strong><span>Orbits · Sun/Moon · stations · contacts · star field</span></div>
     <div className="legend-line"><span className="legend-swatch simulated" /><strong>SIMULATED</strong><span>{localPreview ? 'Preview orbit · power · thermal · faults' : 'Power · thermal · faults'}</span></div>
   </section>;
 }
 
-export function TopBar({ phase, mode, time, speed, hasVerification, muted, onToggleVoice }) {
+export function TopBar({ phase, mode, time, speed, hasVerification, muted, onToggleVoice,
+  skyVisible, onToggleSky }) {
   const activeStage = phase === 'approval' || phase === 'fastforward' || phase === 'reveal'
     ? 2 : hasVerification ? 1 : 0;
   const complete = phase === 'fastforward' || phase === 'reveal';
@@ -112,6 +113,8 @@ export function TopBar({ phase, mode, time, speed, hasVerification, muted, onTog
       {['AI PROPOSES', 'PHYSICS VERIFIES', 'HUMAN APPROVES'].map((label, index) => <div className={`stage ${complete ? 'done' : activeStage === index ? 'active' : ''}`} key={label}>{label}</div>)}
     </div>
     <div className="top-status"><span className="mode-chip">{mode}</span>
+      <button type="button" className="sky-chip" aria-pressed={skyVisible}
+        title="Toggle constellation lines" onClick={onToggleSky}>SKY</button>
       {onToggleVoice && <button type="button" className="voice-chip" aria-pressed={!muted}
         title="Voice callouts (captions always show)" onClick={onToggleVoice}>{muted ? 'VOICE OFF' : 'VOICE ON'}</button>}<time className="num">{timeLabel(time)} UTC</time><span className="speed-chip num">{speed === 0 ? 'PAUSED' : `${speed}×`}</span></div>
   </header>;
