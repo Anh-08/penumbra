@@ -6,7 +6,7 @@ Coverage = share of the full-bleed globe canvas hidden by HUD panels. **Limit: 4
 ## Z-order (low to high)
 | z | Layer | Notes |
 |---|---|---|
-| 0 | Cesium canvas | full-bleed, `pointer-events` on only in attract |
+| 0 | Cesium canvas | full-bleed, mouse input (zoom, rotate, pick, Buffalo pin) stays on in every state; panels sit above it and take the clicks on their own area |
 | 10 | Globe labels | DOM labels and leader lines for alerting / focused sats |
 | 20 | HUD panels | triage, hypotheses, trace strip, legend |
 | 30 | Top bar | |

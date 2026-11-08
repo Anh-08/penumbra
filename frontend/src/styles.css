@@ -6,7 +6,6 @@ button { font: inherit; }
 .globe-stage { position: absolute; inset: 0; z-index: var(--z-globe); background: #071019; }
 .cesium-canvas, .cesium-viewer, .cesium-widget, .cesium-widget canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .cesium-viewer-bottom { display: none !important; }
-.panels-visible .cesium-canvas { pointer-events: none; }
 .globe-vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 43% 48%, transparent 32%, rgba(3, 6, 12, .56) 90%); }
 .scene-error { position: absolute; left: 32px; top: 96px; z-index: var(--z-banner); color: var(--c-refused); font: var(--fs-body) var(--font-ui); }
 
