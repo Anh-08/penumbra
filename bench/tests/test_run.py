@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from backend.fleet.scenarios import build
 from bench.run import load_cached_proposal, run_benchmark
 
 
 def test_cached_gemini_proposal_is_an_allowlisted_command() -> None:
-    command = load_cached_proposal()
+    command = load_cached_proposal(sat_id=build("single-stuck-load").focus_sat)
     assert command.name == "LOAD_OFF"
     assert command.args == {"load": "PAYLOAD"}
 
@@ -25,4 +26,6 @@ def test_four_arms_share_seeded_truth_trials(tmp_path: Path) -> None:
     assert result["arms"]["brute_force"]["violations"] <= result["arms"]["random_valid"]["violations"]
     assert (tmp_path / "b1.json").exists()
     assert result["inputs"]["simulated"]
-    assert result["inputs"]["real"]
+    assert result["focus_sat"] == build("single-stuck-load").focus_sat
+    assert result["inputs"]["recorded"]
+    assert result["inputs"]["real"] == []
