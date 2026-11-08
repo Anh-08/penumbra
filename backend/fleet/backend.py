@@ -26,6 +26,13 @@ from .peers import peer_compare
 from .scenarios import Scenario
 from .triage import triage
 
+def _urgency(a: Alert, now: float) -> tuple:
+    from .detect import SEVERITY_RANK
+    from .triage import slack_s
+
+    return (-SEVERITY_RANK[a.severity], slack_s(a, now))
+
+
 # status a satellite cannot leave by agent activity alone
 _FINAL = {"auto_executed", "executed", "safe_mode_recommended"}
 
@@ -37,9 +44,10 @@ class FleetBackend:
         self.scenario = scenario
         self.world = scenario.world
         self.env = scenario.env
+        conj = list(getattr(scenario, "conjunctions", []) or [])
         self.detector = Detector(self.env, scenario.contacts, self.world.telemetry, self.world.executed,
-                                 scenario.initial)
-        self.verifier = Verifier(self.env, self._belief)
+                                 scenario.initial, conjunctions=lambda: conj)
+        self.verifier = Verifier(self.env, self._belief, conjunctions=lambda s: [c for c in conj if c.sat_id == s])
         self.scheduler = UplinkScheduler(scenario.contacts)
         self._scores: dict[str, scoring.Score] = {}       # fresh diagnosis scores (score_hypotheses)
         self._status: dict[str, str] = {}                  # triage status per satellite
@@ -61,13 +69,22 @@ class FleetBackend:
 
     def triage(self) -> list[TriageEntry]:
         """Satellites with an active alert, plus the ones already handled, most urgent first (triage.py)."""
-        active = {a.sat_id: a for a in self.detector.detect(self.now())}
+        active: dict[str, Alert] = {}
+        for a in self.detector.detect(self.now()):     # one row per satellite: its most urgent alert
+            cur = active.get(a.sat_id)
+            if cur is None or _urgency(a, self.now()) < _urgency(cur, self.now()):
+                active[a.sat_id] = a
         self._last_alert.update(active)
         shown = dict(active)
         for s, st in self._status.items():
             if s not in shown and st != "queued" and s in self._last_alert:
                 shown[s] = self._last_alert[s]
         return triage(list(shown.values()), self._status, self.now())
+
+    def conjunctions(self, sat_id: str | None = None) -> list:
+        """Conjunctions with SIMULATED debris (T31), optionally for one satellite."""
+        conj = list(getattr(self.scenario, "conjunctions", []) or [])
+        return [c for c in conj if sat_id is None or c.sat_id == sat_id]
 
     def peer_compare(self, sat_id: str) -> PeerCompare:
         evs = dict(self.detector._evidence)
@@ -182,5 +199,11 @@ class FleetBackend:
 
     def _belief(self, sat_id: str) -> Belief:
         score = self._scores.get(sat_id) or self.detector.scores(sat_id)
-        return belief_from(sat_id, self.world.telemetry(sat_id), self.world.executed(sat_id),
-                           self._initial(sat_id), score)
+        tm = self.world.telemetry(sat_id)
+        if not np.isfinite(np.asarray(tm["soc"], float)).any():
+            # nothing downlinked yet (e.g. a conjunction alert at T0): the ground's belief is the state at T0
+            ini = self._initial(sat_id)
+            return Belief(sat_id=sat_id, t_state=float(self.env.t[0]), soc=float(ini.soc[0]),
+                          t_bat_c=float(ini.t_bat_c[0]), commands=list(self.world.executed(sat_id)), initial=ini,
+                          plausible=["H0"])
+        return belief_from(sat_id, tm, self.world.executed(sat_id), self._initial(sat_id), score)

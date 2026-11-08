@@ -87,6 +87,8 @@ def tier(plan: Plan, sim: SimResult, ctx: RuleContext) -> tuple[int, str | None]
     """(1, "FR-n") when a flight rule covers the verified plan, else (2, None)."""
     if sim.plan_hash != plan.plan_hash:
         return 2, None                                 # stale result: the Flight Director decides
+    if plan.kind == "maneuver" or any(c.name == "CAM_BURN" for c in plan.commands):
+        return 2, None                                 # T31: a collision-avoidance burn is never Tier 1
     for rule in FLIGHT_RULES:
         if rule.check(plan, sim, ctx):
             return 1, rule.rule_id
