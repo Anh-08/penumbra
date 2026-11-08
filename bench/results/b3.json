@@ -1,0 +1,1305 @@
+{
+ "benchmark": "B3 operator queue: FCFS vs triage + scheduler (T29)",
+ "generated_utc": "2026-11-08T01:39:58+00:00",
+ "n": 10,
+ "seeds": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9
+ ],
+ "operator_minutes_per_decision": 20.0,
+ "summary": {
+  "fcfs": {
+   "violations_total": 19,
+   "violations_after_fix": 15,
+   "plan_attributable_violations": 1,
+   "satellites_at_risk": 60,
+   "mean_alert_to_uplink_min": 77.3
+  },
+  "triage": {
+   "violations_total": 18,
+   "violations_after_fix": 14,
+   "plan_attributable_violations": 1,
+   "satellites_at_risk": 60,
+   "mean_alert_to_uplink_min": 76.4
+  }
+ },
+ "settings": {
+  "faulty_per_storm": 6,
+  "healthy_per_storm": 4,
+  "hours": 12.0,
+  "onset": "T0 + 2 h",
+  "fault_kinds": [
+   "stuck_on_load (AUX)",
+   "array_degradation 0.25-0.40",
+   "capacity_fade 0.40-0.60"
+  ],
+  "tasking": "faulty satellites fly payload duty 1.0, start SOC 0.6-0.8",
+  "fix": "SET_PAYLOAD_DUTY 0.2 + LOAD_OFF AUX, 30 s after the uplink time",
+  "fcfs": "alerts in arrival order, uplink at the next contact",
+  "triage": "backend triage order (severity, then slack); uplink slot from backend/sched inside the next contact (deadline = its LOS), as the agent's dispatcher books it"
+ },
+ "notes": [
+  "One operator, one decision at a time; each decision takes X minutes of sim time.",
+  "violations = faulty satellites whose true SOC goes below 0.30 after onset (truth simulator); violations_after_fix only after that satellite's fix executed.",
+  "The same fix is used in both arms. With one decision at a time the scheduler rarely meets a station conflict, so the arms differ mainly in the order the operator works the queue."
+ ],
+ "data": {
+  "real": [
+   "24 satellite orbits (cached public OMM elements, renamed SAT-01..SAT-24)",
+   "Sun/Earth geometry (JPL DE421) and the illumination derived from it",
+   "ground station sites and 10 deg contact windows",
+   "battery OCV curve, R0, coulombic efficiency and fade rate inside the truth simulator (NASA PCoE fit)"
+  ],
+  "simulated": [
+   "EPS telemetry and truth",
+   "faults and tasking (seeded)",
+   "the operator"
+  ]
+ },
+ "rows": [
+  {
+   "seed": 0,
+   "policy": "fcfs",
+   "faulty": [
+    "SAT-09",
+    "SAT-15",
+    "SAT-17",
+    "SAT-14",
+    "SAT-08",
+    "SAT-20"
+   ],
+   "alerted": 4,
+   "handled": 4,
+   "violations": 3,
+   "violations_after_fix": 3,
+   "plan_attributable_violations": 0,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 77.1,
+   "truth": {
+    "SAT-09": {
+     "min_soc": 0.548,
+     "violated": false,
+     "soc_at_fix": 0.696,
+     "min_soc_after_fix": 0.548,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-15": {
+     "min_soc": 0.239,
+     "violated": true,
+     "soc_at_fix": 0.246,
+     "min_soc_after_fix": 0.239,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-17": {
+     "min_soc": 0.179,
+     "violated": true,
+     "soc_at_fix": 0.265,
+     "min_soc_after_fix": 0.257,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-14": {
+     "min_soc": 1.0,
+     "violated": false
+    },
+    "SAT-08": {
+     "min_soc": 0.548,
+     "violated": false
+    },
+    "SAT-20": {
+     "min_soc": 0.081,
+     "violated": true,
+     "soc_at_fix": 0.084,
+     "min_soc_after_fix": 0.081,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    }
+   }
+  },
+  {
+   "seed": 0,
+   "policy": "triage",
+   "faulty": [
+    "SAT-09",
+    "SAT-15",
+    "SAT-17",
+    "SAT-14",
+    "SAT-08",
+    "SAT-20"
+   ],
+   "alerted": 4,
+   "handled": 4,
+   "violations": 3,
+   "violations_after_fix": 3,
+   "plan_attributable_violations": 0,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 77.1,
+   "truth": {
+    "SAT-09": {
+     "min_soc": 0.548,
+     "violated": false,
+     "soc_at_fix": 0.696,
+     "min_soc_after_fix": 0.548,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-15": {
+     "min_soc": 0.239,
+     "violated": true,
+     "soc_at_fix": 0.246,
+     "min_soc_after_fix": 0.239,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-17": {
+     "min_soc": 0.179,
+     "violated": true,
+     "soc_at_fix": 0.265,
+     "min_soc_after_fix": 0.257,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-14": {
+     "min_soc": 1.0,
+     "violated": false
+    },
+    "SAT-08": {
+     "min_soc": 0.548,
+     "violated": false
+    },
+    "SAT-20": {
+     "min_soc": 0.081,
+     "violated": true,
+     "soc_at_fix": 0.084,
+     "min_soc_after_fix": 0.081,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    }
+   }
+  },
+  {
+   "seed": 1,
+   "policy": "fcfs",
+   "faulty": [
+    "SAT-06",
+    "SAT-24",
+    "SAT-07",
+    "SAT-05",
+    "SAT-15",
+    "SAT-02"
+   ],
+   "alerted": 5,
+   "handled": 5,
+   "violations": 2,
+   "violations_after_fix": 1,
+   "plan_attributable_violations": 0,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 80.0,
+   "truth": {
+    "SAT-06": {
+     "min_soc": 1.0,
+     "violated": false
+    },
+    "SAT-24": {
+     "min_soc": 0.0,
+     "violated": true,
+     "soc_at_fix": 0.012,
+     "min_soc_after_fix": 0.0,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-07": {
+     "min_soc": 0.577,
+     "violated": false,
+     "soc_at_fix": 0.58,
+     "min_soc_after_fix": 0.58,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-05": {
+     "min_soc": 0.536,
+     "violated": false,
+     "soc_at_fix": 0.536,
+     "min_soc_after_fix": 0.536,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-15": {
+     "min_soc": 0.124,
+     "violated": true,
+     "soc_at_fix": 0.702,
+     "min_soc_after_fix": 0.69,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-02": {
+     "min_soc": 0.774,
+     "violated": false,
+     "soc_at_fix": 0.969,
+     "min_soc_after_fix": 0.774,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    }
+   }
+  },
+  {
+   "seed": 1,
+   "policy": "triage",
+   "faulty": [
+    "SAT-06",
+    "SAT-24",
+    "SAT-07",
+    "SAT-05",
+    "SAT-15",
+    "SAT-02"
+   ],
+   "alerted": 5,
+   "handled": 5,
+   "violations": 2,
+   "violations_after_fix": 1,
+   "plan_attributable_violations": 0,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 80.0,
+   "truth": {
+    "SAT-06": {
+     "min_soc": 1.0,
+     "violated": false
+    },
+    "SAT-24": {
+     "min_soc": 0.0,
+     "violated": true,
+     "soc_at_fix": 0.012,
+     "min_soc_after_fix": 0.0,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-07": {
+     "min_soc": 0.577,
+     "violated": false,
+     "soc_at_fix": 0.58,
+     "min_soc_after_fix": 0.58,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-05": {
+     "min_soc": 0.536,
+     "violated": false,
+     "soc_at_fix": 0.536,
+     "min_soc_after_fix": 0.536,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-15": {
+     "min_soc": 0.124,
+     "violated": true,
+     "soc_at_fix": 0.702,
+     "min_soc_after_fix": 0.69,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-02": {
+     "min_soc": 0.774,
+     "violated": false,
+     "soc_at_fix": 0.969,
+     "min_soc_after_fix": 0.774,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    }
+   }
+  },
+  {
+   "seed": 2,
+   "policy": "fcfs",
+   "faulty": [
+    "SAT-09",
+    "SAT-02",
+    "SAT-13",
+    "SAT-10",
+    "SAT-04",
+    "SAT-21"
+   ],
+   "alerted": 4,
+   "handled": 4,
+   "violations": 1,
+   "violations_after_fix": 1,
+   "plan_attributable_violations": 1,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 51.3,
+   "truth": {
+    "SAT-09": {
+     "min_soc": 0.511,
+     "violated": false,
+     "soc_at_fix": 0.662,
+     "min_soc_after_fix": 0.511,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-02": {
+     "min_soc": 0.475,
+     "violated": false
+    },
+    "SAT-13": {
+     "min_soc": 0.461,
+     "violated": false,
+     "soc_at_fix": 0.623,
+     "min_soc_after_fix": 0.461,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-10": {
+     "min_soc": 0.345,
+     "violated": false,
+     "soc_at_fix": 0.938,
+     "min_soc_after_fix": 0.693,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-04": {
+     "min_soc": 1.0,
+     "violated": false
+    },
+    "SAT-21": {
+     "min_soc": 0.26,
+     "violated": true,
+     "soc_at_fix": 0.302,
+     "min_soc_after_fix": 0.29,
+     "violated_after_fix": true,
+     "plan_attributable_violation": true
+    }
+   }
+  },
+  {
+   "seed": 2,
+   "policy": "triage",
+   "faulty": [
+    "SAT-09",
+    "SAT-02",
+    "SAT-13",
+    "SAT-10",
+    "SAT-04",
+    "SAT-21"
+   ],
+   "alerted": 4,
+   "handled": 4,
+   "violations": 1,
+   "violations_after_fix": 1,
+   "plan_attributable_violations": 1,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 51.3,
+   "truth": {
+    "SAT-09": {
+     "min_soc": 0.511,
+     "violated": false,
+     "soc_at_fix": 0.662,
+     "min_soc_after_fix": 0.511,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-02": {
+     "min_soc": 0.475,
+     "violated": false
+    },
+    "SAT-13": {
+     "min_soc": 0.461,
+     "violated": false,
+     "soc_at_fix": 0.623,
+     "min_soc_after_fix": 0.461,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-10": {
+     "min_soc": 0.345,
+     "violated": false,
+     "soc_at_fix": 0.938,
+     "min_soc_after_fix": 0.693,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-04": {
+     "min_soc": 1.0,
+     "violated": false
+    },
+    "SAT-21": {
+     "min_soc": 0.26,
+     "violated": true,
+     "soc_at_fix": 0.302,
+     "min_soc_after_fix": 0.29,
+     "violated_after_fix": true,
+     "plan_attributable_violation": true
+    }
+   }
+  },
+  {
+   "seed": 3,
+   "policy": "fcfs",
+   "faulty": [
+    "SAT-16",
+    "SAT-01",
+    "SAT-17",
+    "SAT-13",
+    "SAT-10",
+    "SAT-22"
+   ],
+   "alerted": 4,
+   "handled": 4,
+   "violations": 3,
+   "violations_after_fix": 3,
+   "plan_attributable_violations": 0,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 89.5,
+   "truth": {
+    "SAT-16": {
+     "min_soc": 0.181,
+     "violated": true,
+     "soc_at_fix": 0.202,
+     "min_soc_after_fix": 0.186,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-01": {
+     "min_soc": 0.343,
+     "violated": false,
+     "soc_at_fix": 0.351,
+     "min_soc_after_fix": 0.343,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-17": {
+     "min_soc": 0.045,
+     "violated": true,
+     "soc_at_fix": 0.054,
+     "min_soc_after_fix": 0.045,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-13": {
+     "min_soc": 0.415,
+     "violated": false
+    },
+    "SAT-10": {
+     "min_soc": 0.377,
+     "violated": false
+    },
+    "SAT-22": {
+     "min_soc": 0.249,
+     "violated": true,
+     "soc_at_fix": 0.258,
+     "min_soc_after_fix": 0.249,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    }
+   }
+  },
+  {
+   "seed": 3,
+   "policy": "triage",
+   "faulty": [
+    "SAT-16",
+    "SAT-01",
+    "SAT-17",
+    "SAT-13",
+    "SAT-10",
+    "SAT-22"
+   ],
+   "alerted": 4,
+   "handled": 4,
+   "violations": 3,
+   "violations_after_fix": 3,
+   "plan_attributable_violations": 0,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 89.5,
+   "truth": {
+    "SAT-16": {
+     "min_soc": 0.181,
+     "violated": true,
+     "soc_at_fix": 0.202,
+     "min_soc_after_fix": 0.186,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-01": {
+     "min_soc": 0.343,
+     "violated": false,
+     "soc_at_fix": 0.351,
+     "min_soc_after_fix": 0.343,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-17": {
+     "min_soc": 0.045,
+     "violated": true,
+     "soc_at_fix": 0.054,
+     "min_soc_after_fix": 0.045,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-13": {
+     "min_soc": 0.415,
+     "violated": false
+    },
+    "SAT-10": {
+     "min_soc": 0.377,
+     "violated": false
+    },
+    "SAT-22": {
+     "min_soc": 0.249,
+     "violated": true,
+     "soc_at_fix": 0.258,
+     "min_soc_after_fix": 0.249,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    }
+   }
+  },
+  {
+   "seed": 4,
+   "policy": "fcfs",
+   "faulty": [
+    "SAT-03",
+    "SAT-24",
+    "SAT-05",
+    "SAT-20",
+    "SAT-11",
+    "SAT-10"
+   ],
+   "alerted": 5,
+   "handled": 5,
+   "violations": 1,
+   "violations_after_fix": 1,
+   "plan_attributable_violations": 0,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 72.9,
+   "truth": {
+    "SAT-03": {
+     "min_soc": 0.723,
+     "violated": false
+    },
+    "SAT-24": {
+     "min_soc": 0.095,
+     "violated": true,
+     "soc_at_fix": 0.109,
+     "min_soc_after_fix": 0.095,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-05": {
+     "min_soc": 0.512,
+     "violated": false,
+     "soc_at_fix": 0.512,
+     "min_soc_after_fix": 0.512,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-20": {
+     "min_soc": 0.3,
+     "violated": false,
+     "soc_at_fix": 0.302,
+     "min_soc_after_fix": 0.302,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-11": {
+     "min_soc": 0.627,
+     "violated": false,
+     "soc_at_fix": 0.691,
+     "min_soc_after_fix": 0.661,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-10": {
+     "min_soc": 0.524,
+     "violated": false,
+     "soc_at_fix": 0.527,
+     "min_soc_after_fix": 0.524,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    }
+   }
+  },
+  {
+   "seed": 4,
+   "policy": "triage",
+   "faulty": [
+    "SAT-03",
+    "SAT-24",
+    "SAT-05",
+    "SAT-20",
+    "SAT-11",
+    "SAT-10"
+   ],
+   "alerted": 5,
+   "handled": 5,
+   "violations": 1,
+   "violations_after_fix": 1,
+   "plan_attributable_violations": 0,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 72.9,
+   "truth": {
+    "SAT-03": {
+     "min_soc": 0.723,
+     "violated": false
+    },
+    "SAT-24": {
+     "min_soc": 0.095,
+     "violated": true,
+     "soc_at_fix": 0.109,
+     "min_soc_after_fix": 0.095,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-05": {
+     "min_soc": 0.512,
+     "violated": false,
+     "soc_at_fix": 0.512,
+     "min_soc_after_fix": 0.512,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-20": {
+     "min_soc": 0.3,
+     "violated": false,
+     "soc_at_fix": 0.302,
+     "min_soc_after_fix": 0.302,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-11": {
+     "min_soc": 0.627,
+     "violated": false,
+     "soc_at_fix": 0.691,
+     "min_soc_after_fix": 0.661,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-10": {
+     "min_soc": 0.524,
+     "violated": false,
+     "soc_at_fix": 0.527,
+     "min_soc_after_fix": 0.524,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    }
+   }
+  },
+  {
+   "seed": 5,
+   "policy": "fcfs",
+   "faulty": [
+    "SAT-09",
+    "SAT-01",
+    "SAT-10",
+    "SAT-19",
+    "SAT-11",
+    "SAT-03"
+   ],
+   "alerted": 5,
+   "handled": 5,
+   "violations": 1,
+   "violations_after_fix": 0,
+   "plan_attributable_violations": 0,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 58.3,
+   "truth": {
+    "SAT-09": {
+     "min_soc": 0.469,
+     "violated": false,
+     "soc_at_fix": 0.64,
+     "min_soc_after_fix": 0.469,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-01": {
+     "min_soc": 0.534,
+     "violated": false,
+     "soc_at_fix": 0.539,
+     "min_soc_after_fix": 0.534,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-10": {
+     "min_soc": 0.654,
+     "violated": false,
+     "soc_at_fix": 0.713,
+     "min_soc_after_fix": 0.688,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-19": {
+     "min_soc": 0.134,
+     "violated": true,
+     "soc_at_fix": 0.705,
+     "min_soc_after_fix": 0.69,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-11": {
+     "min_soc": 0.508,
+     "violated": false,
+     "soc_at_fix": 0.994,
+     "min_soc_after_fix": 0.651,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-03": {
+     "min_soc": 0.695,
+     "violated": false
+    }
+   }
+  },
+  {
+   "seed": 5,
+   "policy": "triage",
+   "faulty": [
+    "SAT-09",
+    "SAT-01",
+    "SAT-10",
+    "SAT-19",
+    "SAT-11",
+    "SAT-03"
+   ],
+   "alerted": 5,
+   "handled": 5,
+   "violations": 1,
+   "violations_after_fix": 0,
+   "plan_attributable_violations": 0,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 58.3,
+   "truth": {
+    "SAT-09": {
+     "min_soc": 0.469,
+     "violated": false,
+     "soc_at_fix": 0.64,
+     "min_soc_after_fix": 0.469,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-01": {
+     "min_soc": 0.534,
+     "violated": false,
+     "soc_at_fix": 0.539,
+     "min_soc_after_fix": 0.534,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-10": {
+     "min_soc": 0.654,
+     "violated": false,
+     "soc_at_fix": 0.713,
+     "min_soc_after_fix": 0.688,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-19": {
+     "min_soc": 0.134,
+     "violated": true,
+     "soc_at_fix": 0.705,
+     "min_soc_after_fix": 0.69,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-11": {
+     "min_soc": 0.508,
+     "violated": false,
+     "soc_at_fix": 0.994,
+     "min_soc_after_fix": 0.651,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-03": {
+     "min_soc": 0.695,
+     "violated": false
+    }
+   }
+  },
+  {
+   "seed": 6,
+   "policy": "fcfs",
+   "faulty": [
+    "SAT-19",
+    "SAT-03",
+    "SAT-16",
+    "SAT-18",
+    "SAT-10",
+    "SAT-01"
+   ],
+   "alerted": 4,
+   "handled": 4,
+   "violations": 3,
+   "violations_after_fix": 2,
+   "plan_attributable_violations": 0,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 80.9,
+   "truth": {
+    "SAT-19": {
+     "min_soc": 0.265,
+     "violated": true,
+     "soc_at_fix": 0.274,
+     "min_soc_after_fix": 0.265,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-03": {
+     "min_soc": 0.769,
+     "violated": false
+    },
+    "SAT-16": {
+     "min_soc": 0.067,
+     "violated": true,
+     "soc_at_fix": 0.079,
+     "min_soc_after_fix": 0.067,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-18": {
+     "min_soc": 0.132,
+     "violated": true,
+     "soc_at_fix": 0.698,
+     "min_soc_after_fix": 0.686,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-10": {
+     "min_soc": 0.52,
+     "violated": false,
+     "soc_at_fix": 0.523,
+     "min_soc_after_fix": 0.52,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-01": {
+     "min_soc": 0.36,
+     "violated": false
+    }
+   }
+  },
+  {
+   "seed": 6,
+   "policy": "triage",
+   "faulty": [
+    "SAT-19",
+    "SAT-03",
+    "SAT-16",
+    "SAT-18",
+    "SAT-10",
+    "SAT-01"
+   ],
+   "alerted": 4,
+   "handled": 4,
+   "violations": 3,
+   "violations_after_fix": 2,
+   "plan_attributable_violations": 0,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 80.9,
+   "truth": {
+    "SAT-19": {
+     "min_soc": 0.265,
+     "violated": true,
+     "soc_at_fix": 0.274,
+     "min_soc_after_fix": 0.265,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-03": {
+     "min_soc": 0.769,
+     "violated": false
+    },
+    "SAT-16": {
+     "min_soc": 0.067,
+     "violated": true,
+     "soc_at_fix": 0.079,
+     "min_soc_after_fix": 0.067,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-18": {
+     "min_soc": 0.132,
+     "violated": true,
+     "soc_at_fix": 0.698,
+     "min_soc_after_fix": 0.686,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-10": {
+     "min_soc": 0.52,
+     "violated": false,
+     "soc_at_fix": 0.523,
+     "min_soc_after_fix": 0.52,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-01": {
+     "min_soc": 0.36,
+     "violated": false
+    }
+   }
+  },
+  {
+   "seed": 7,
+   "policy": "fcfs",
+   "faulty": [
+    "SAT-06",
+    "SAT-19",
+    "SAT-05",
+    "SAT-16",
+    "SAT-01",
+    "SAT-04"
+   ],
+   "alerted": 3,
+   "handled": 3,
+   "violations": 0,
+   "violations_after_fix": 0,
+   "plan_attributable_violations": 0,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 91.3,
+   "truth": {
+    "SAT-06": {
+     "min_soc": 1.0,
+     "violated": false
+    },
+    "SAT-19": {
+     "min_soc": 0.388,
+     "violated": false
+    },
+    "SAT-05": {
+     "min_soc": 0.432,
+     "violated": false,
+     "soc_at_fix": 0.433,
+     "min_soc_after_fix": 0.433,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-16": {
+     "min_soc": 0.373,
+     "violated": false,
+     "soc_at_fix": 0.379,
+     "min_soc_after_fix": 0.373,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-01": {
+     "min_soc": 0.307,
+     "violated": false,
+     "soc_at_fix": 0.315,
+     "min_soc_after_fix": 0.307,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-04": {
+     "min_soc": 1.0,
+     "violated": false
+    }
+   }
+  },
+  {
+   "seed": 7,
+   "policy": "triage",
+   "faulty": [
+    "SAT-06",
+    "SAT-19",
+    "SAT-05",
+    "SAT-16",
+    "SAT-01",
+    "SAT-04"
+   ],
+   "alerted": 3,
+   "handled": 3,
+   "violations": 0,
+   "violations_after_fix": 0,
+   "plan_attributable_violations": 0,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 91.3,
+   "truth": {
+    "SAT-06": {
+     "min_soc": 1.0,
+     "violated": false
+    },
+    "SAT-19": {
+     "min_soc": 0.388,
+     "violated": false
+    },
+    "SAT-05": {
+     "min_soc": 0.432,
+     "violated": false,
+     "soc_at_fix": 0.433,
+     "min_soc_after_fix": 0.433,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-16": {
+     "min_soc": 0.373,
+     "violated": false,
+     "soc_at_fix": 0.379,
+     "min_soc_after_fix": 0.373,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-01": {
+     "min_soc": 0.307,
+     "violated": false,
+     "soc_at_fix": 0.315,
+     "min_soc_after_fix": 0.307,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-04": {
+     "min_soc": 1.0,
+     "violated": false
+    }
+   }
+  },
+  {
+   "seed": 8,
+   "policy": "fcfs",
+   "faulty": [
+    "SAT-24",
+    "SAT-11",
+    "SAT-05",
+    "SAT-22",
+    "SAT-09",
+    "SAT-23"
+   ],
+   "alerted": 6,
+   "handled": 6,
+   "violations": 3,
+   "violations_after_fix": 3,
+   "plan_attributable_violations": 0,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 81.2,
+   "truth": {
+    "SAT-24": {
+     "min_soc": 0.461,
+     "violated": false,
+     "soc_at_fix": 0.468,
+     "min_soc_after_fix": 0.461,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-11": {
+     "min_soc": 0.129,
+     "violated": true,
+     "soc_at_fix": 0.134,
+     "min_soc_after_fix": 0.129,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-05": {
+     "min_soc": 0.456,
+     "violated": false,
+     "soc_at_fix": 0.457,
+     "min_soc_after_fix": 0.456,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-22": {
+     "min_soc": 0.243,
+     "violated": true,
+     "soc_at_fix": 0.247,
+     "min_soc_after_fix": 0.243,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-09": {
+     "min_soc": 0.407,
+     "violated": false,
+     "soc_at_fix": 0.561,
+     "min_soc_after_fix": 0.407,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-23": {
+     "min_soc": 0.116,
+     "violated": true,
+     "soc_at_fix": 0.125,
+     "min_soc_after_fix": 0.116,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    }
+   }
+  },
+  {
+   "seed": 8,
+   "policy": "triage",
+   "faulty": [
+    "SAT-24",
+    "SAT-11",
+    "SAT-05",
+    "SAT-22",
+    "SAT-09",
+    "SAT-23"
+   ],
+   "alerted": 6,
+   "handled": 6,
+   "violations": 2,
+   "violations_after_fix": 2,
+   "plan_attributable_violations": 0,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 72.2,
+   "truth": {
+    "SAT-24": {
+     "min_soc": 0.461,
+     "violated": false,
+     "soc_at_fix": 0.468,
+     "min_soc_after_fix": 0.461,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-11": {
+     "min_soc": 0.398,
+     "violated": false,
+     "soc_at_fix": 0.566,
+     "min_soc_after_fix": 0.398,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-05": {
+     "min_soc": 0.456,
+     "violated": false,
+     "soc_at_fix": 0.457,
+     "min_soc_after_fix": 0.456,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-22": {
+     "min_soc": 0.243,
+     "violated": true,
+     "soc_at_fix": 0.247,
+     "min_soc_after_fix": 0.243,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-09": {
+     "min_soc": 0.407,
+     "violated": false,
+     "soc_at_fix": 0.561,
+     "min_soc_after_fix": 0.407,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-23": {
+     "min_soc": 0.116,
+     "violated": true,
+     "soc_at_fix": 0.125,
+     "min_soc_after_fix": 0.116,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    }
+   }
+  },
+  {
+   "seed": 9,
+   "policy": "fcfs",
+   "faulty": [
+    "SAT-14",
+    "SAT-03",
+    "SAT-18",
+    "SAT-04",
+    "SAT-17",
+    "SAT-06"
+   ],
+   "alerted": 2,
+   "handled": 2,
+   "violations": 2,
+   "violations_after_fix": 1,
+   "plan_attributable_violations": 0,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 90.4,
+   "truth": {
+    "SAT-14": {
+     "min_soc": 1.0,
+     "violated": false
+    },
+    "SAT-03": {
+     "min_soc": 0.739,
+     "violated": false
+    },
+    "SAT-18": {
+     "min_soc": 0.214,
+     "violated": true,
+     "soc_at_fix": 0.237,
+     "min_soc_after_fix": 0.222,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-04": {
+     "min_soc": 1.0,
+     "violated": false
+    },
+    "SAT-17": {
+     "min_soc": 0.126,
+     "violated": true,
+     "soc_at_fix": 0.737,
+     "min_soc_after_fix": 0.731,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-06": {
+     "min_soc": 1.0,
+     "violated": false
+    }
+   }
+  },
+  {
+   "seed": 9,
+   "policy": "triage",
+   "faulty": [
+    "SAT-14",
+    "SAT-03",
+    "SAT-18",
+    "SAT-04",
+    "SAT-17",
+    "SAT-06"
+   ],
+   "alerted": 2,
+   "handled": 2,
+   "violations": 2,
+   "violations_after_fix": 1,
+   "plan_attributable_violations": 0,
+   "false_alerts": 0,
+   "mean_alert_to_uplink_min": 90.4,
+   "truth": {
+    "SAT-14": {
+     "min_soc": 1.0,
+     "violated": false
+    },
+    "SAT-03": {
+     "min_soc": 0.739,
+     "violated": false
+    },
+    "SAT-18": {
+     "min_soc": 0.214,
+     "violated": true,
+     "soc_at_fix": 0.237,
+     "min_soc_after_fix": 0.222,
+     "violated_after_fix": true,
+     "plan_attributable_violation": false
+    },
+    "SAT-04": {
+     "min_soc": 1.0,
+     "violated": false
+    },
+    "SAT-17": {
+     "min_soc": 0.126,
+     "violated": true,
+     "soc_at_fix": 0.737,
+     "min_soc_after_fix": 0.731,
+     "violated_after_fix": false,
+     "plan_attributable_violation": false
+    },
+    "SAT-06": {
+     "min_soc": 1.0,
+     "violated": false
+    }
+   }
+  }
+ ]
+}
