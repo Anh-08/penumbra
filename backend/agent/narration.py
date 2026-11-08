@@ -78,9 +78,28 @@ def narration_problems(text: str, registry: Registry) -> list[str]:
     return problems
 
 
+# Units format_value appends. A model that writes the unit again after a placeholder ("{CJ-1.miss_km} km")
+# would show it twice ("0.30 km km"); render keeps one.
+_UNITS = ("% SOC", "m/s", "km", "min", "ms", "°C", "UTC", "W", "V", "%", "h", "s", "°")
+
+
 def render(text: str, registry: Registry) -> str:
     """Fill every placeholder with the backend value. Raises RenderError if one does not resolve."""
-    return PLACEHOLDER_RE.sub(lambda m: format_value(*_resolve(m.group(0)[1:-1], registry)), text)
+    out, pos = [], 0
+    for m in PLACEHOLDER_RE.finditer(text):
+        out.append(text[pos:m.start()])
+        value = format_value(*_resolve(m.group(0)[1:-1], registry))
+        out.append(value)
+        pos = m.end()
+        unit = next((u for u in _UNITS if value.endswith(u)), None) if re.search(r"\d", value) else None
+        if unit:  # the unit (or its last word: "SOC" after "% SOC") written again right after the placeholder
+            for candidate in dict.fromkeys((unit, unit.split()[-1])):
+                repeat = re.match(r"\s*" + re.escape(candidate) + r"(?![\w/])", text[pos:])
+                if repeat:
+                    pos += repeat.end()
+                    break
+    out.append(text[pos:])
+    return "".join(out)
 
 
 def safe_text(text: str | None, registry: Registry) -> str | None:
