@@ -9,7 +9,8 @@ from __future__ import annotations
 from typing import Any
 
 from contracts import (
-    COMMAND_NAMES,
+    ALL_COMMAND_NAMES,
+    CAM_WINDOW_IDS,
     HEATER_SETPOINT_RANGE_C,
     HYPOTHESES,
     LOADS,
@@ -31,12 +32,13 @@ _COMMAND = {
     "type": "object",
     "description": "One allowlisted command.",
     "properties": {
-        "name": {"type": "string", "enum": list(COMMAND_NAMES)},
+        "name": {"type": "string", "enum": list(ALL_COMMAND_NAMES)},
         "args": {
             "type": "object",
             "description": (
                 "LOAD_OFF/LOAD_ON: {load}. SET_PAYLOAD_DUTY: {duty}. SET_HEATER_SETPOINT: {setpoint_c}. "
-                "SAFE_MODE: no args."
+                "SAFE_MODE: no args. CAM_BURN: {window_id} (a collision-avoidance burn in a window from "
+                "get_conjunctions; only in propose_plan)."
             ),
             "properties": {
                 "load": {
@@ -56,13 +58,20 @@ _COMMAND = {
                     "maximum": HEATER_SETPOINT_RANGE_C[1],
                     "description": "Battery heater setpoint, degrees C.",
                 },
+                "window_id": {
+                    "type": "string",
+                    "enum": list(CAM_WINDOW_IDS),
+                    "description": "CAM_BURN only: the maneuver window to burn in. You never give a delta-v; "
+                                   "the window carries it.",
+                },
             },
         },
         "t_exec": {
             "type": "number",
             "description": (
-                "Execution time, POSIX seconds UTC. Optional: omit it to execute at the uplink AOS. "
-                "Set it later to time-tag a command (for example during eclipse)."
+                "Execution time, POSIX seconds UTC. Optional: omit it to execute at the uplink AOS "
+                "(a CAM_BURN at the start of its window). Set it later to time-tag a command (for example "
+                "during eclipse); a CAM_BURN must stay inside its window."
             ),
         },
     },
@@ -113,7 +122,8 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     _tool(
         "propose_plan",
         "Register a candidate recovery plan for the next contact. Returns {plan_id} or {error}. "
-        "Propose several alternatives and let simulate judge them.",
+        "Propose several alternatives and let simulate judge them. A plan with one CAM_BURN (plus optional "
+        "power commands) is a collision-avoidance maneuver: one plan per window you want judged.",
         {"sat_id": _SAT_ID, "commands": _COMMANDS},
         ["sat_id", "commands"],
     ),
@@ -152,6 +162,17 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "(status awaiting_approval). A plan that failed verification is refused.",
         {"plan_id": _PLAN_ID},
         ["plan_id"],
+    ),
+    # T31 (contracts.AGENT_TOOLS_CAM)
+    _tool(
+        "get_conjunctions",
+        "Predicted close approaches of this satellite with (simulated) debris: {conjunctions: [{conj_id, object_id, "
+        "tca, miss_km, windows: [{window_id, t_start, t_end, dv_mps, burn_s, power_w, miss_after_km}]}]}. Each "
+        "window is a burn the backend offers; you choose one with CAM_BURN {window_id}. Early windows need less "
+        "delta-v but come while the battery may still be low; late windows find it charged but need a larger "
+        "burn. Only simulate decides whether the battery survives the burn.",
+        {"sat_id": _SAT_ID},
+        ["sat_id"],
     ),
 ]
 

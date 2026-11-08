@@ -16,6 +16,7 @@ from typing import Any, Literal, Mapping, Protocol, Sequence
 
 from contracts import (
     Alert,
+    Conjunction,
     Contact,
     HypothesisScores,
     Plan,
@@ -56,6 +57,11 @@ class Backend(Protocol):
 
     # sched (B2)
     def schedule(self, requests: list[ScheduleRequest]) -> ScheduleResult: ...
+
+    # orbit, T31 (optional: a backend without it simply has no conjunctions, and CAM plans are refused)
+    def conjunctions(self) -> list[Conjunction]:
+        """Predicted conjunctions with simulated debris, each with its maneuver windows W1..W3."""
+        ...
 
     # execution (B1, wired at T22)
     def execute(self, plan: Plan) -> float:
