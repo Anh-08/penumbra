@@ -4,11 +4,22 @@ agent's registry of plans, simulation results, alerts and approvals.
 Bad input never raises out of `dispatch`; the model gets `{"error": ...}` back and can try again.
 Every result is plain JSON (no NaN, no pydantic objects), ready for the model and the flight recorder.
 `approve()` is the check behind POST /api/approve; `execute()` runs an approved plan afterwards.
+`operator_ticket()` gives the Flight Director's button an approval_id for any simulated plan, including a red one,
+so pressing it shows the refusal with the failing hypotheses (physics has veto). The agent's own
+`request_approval` tool still refuses failed plans. Tickets for several plans of one satellite can coexist; once
+one recovery plan is approved (or auto-executed), approving another one for that satellite is refused (superseded).
 
 Diagnostic tests (T20): `propose_diagnostic_test` time-tags untagged steps one DIAGNOSTIC_STEP_S apart inside
 the pass. A Tier 1 plan (pre-approved flight rule) executes as soon as `request_approval` is called. After a
 diagnostic executes, `propose_plan` for that satellite is refused until `score_hypotheses` has been called
 again, so every plan is built on the diagnostic's evidence.
+
+Infeasible (T26): after MAX_FAILED_PLANS failed plans for a satellite, only a SAFE_MODE plan may still be
+proposed, and simulate results say so; if the backend offers rank(sat_id), they also carry its status.
+
+Station conflicts (T26): `schedule_uplink` re-solves every pending request together. If the plan gets no slot,
+its contact is marked blocked for that satellite and the next proposal targets the following contact. Plans
+that lost the slot they had are reported as `bumped` (and in `self.bumped`). `request_approval` needs a slot.
 """
 from __future__ import annotations
 
@@ -44,6 +55,7 @@ TELEMETRY_WINDOW_S = 3 * 3600.0  # default get_telemetry window, ending now
 MAX_TELEMETRY_POINTS = 120  # keep tool results small for the model
 UPLINK_DURATION_S = 60.0  # station time requested per plan uplink
 DIAGNOSTIC_STEP_S = DWELL_S  # dwell per diagnostic step, same as backend.verify.diagnostics
+MAX_FAILED_PLANS = 4  # failed non-SAFE_MODE plans per satellite before the search stops (infeasible)
 
 
 class ToolArgError(ValueError):
@@ -72,6 +84,10 @@ class Dispatcher:
         self._executed: set[str] = set()
         self._flight_rules: dict[str, str | None] = {}  # approval_id -> flight rule id (Tier 1)
         self._needs_rescore: dict[str, str] = {}  # sat_id -> diagnostic plan_id executed since the last score
+        self._blocked: dict[str, set[tuple[str, float]]] = {}  # sat_id -> (station_id, aos) with no free slot
+        self.bumped: set[str] = set()  # plan_ids that lost their uplink slot to another plan
+        self._executed_plans: set[str] = set()
+        self._fixed: dict[str, Assignment] = {}  # booked slots of executed plans: never moved, never given away
         self._schedule_requests: dict[str, ScheduleRequest] = {}
         self._schemas = {s["name"]: s["parameters"] for s in TOOL_SCHEMAS}
         self._handlers = {name: getattr(self, f"_tool_{name}") for name in AGENT_TOOLS}
@@ -137,11 +153,21 @@ class Dispatcher:
             if not sim.passes_all:
                 failing = safety.failing_hypotheses(sim)
                 raise SafetyError("failed_verification", f"{plan.plan_id} failed verification ({sim.sim_id})")
+            if plan.kind == "plan":  # one recovery plan per satellite: the first approved one wins (after the
+                # verification checks, so a red plan always shows why it failed)
+                done = next((t.plan_id for a, t in self.approvals.items() if a in self._decided
+                             and t.sat_id == plan.sat_id and self.plans[t.plan_id].kind == "plan"), None)
+                if done is not None:
+                    raise SafetyError("superseded", f"{done} was already approved for {plan.sat_id}")
             current = safety.plan_hash(plan)
             if not (plan_hash == current == sim.plan_hash == ticket.plan_hash):
                 raise SafetyError("stale_hash", f"hash does not match the latest verified version of {plan.plan_id}")
             safety.check_plan(plan, self.backend.contacts(), now=self.backend.now())
             slot = self.assignments.get(plan.plan_id)
+            if slot is None and plan.plan_id in self._schedule_requests:
+                raise SafetyError("uplink_closed", f"{plan.plan_id} has no uplink slot (it lost it to another plan)")
+            if slot is None:
+                raise SafetyError("not_scheduled", f"{plan.plan_id} has no booked uplink; schedule it first")
             if slot is not None and self.backend.now() >= slot.end_t:
                 raise SafetyError("uplink_closed", f"the scheduled uplink for {plan.plan_id} has passed")
         except SafetyError as exc:
@@ -160,6 +186,29 @@ class Dispatcher:
             plan_hash=current,
         )
         return plan
+
+    def operator_ticket(self, plan_id: str) -> ApprovalRequestMsg:
+        """Approval ticket for the Flight Director's button on any simulated plan (green or red).
+
+        Returns the plan's open ticket if it has one for its latest simulation, else a new Tier 2 ticket (a human
+        decides; the tier policy is not consulted). Nothing is executed here: `approve()` still decides, and a plan
+        that failed verification is refused there with its failing hypotheses. Raises SafetyError if the plan is
+        unknown or was never simulated."""
+        plan = self.plans.get(plan_id) if isinstance(plan_id, str) else None
+        if plan is None:
+            raise SafetyError("unknown_plan", f"no plan {plan_id!r}")
+        sim = self.sims.get(plan.plan_id)
+        if sim is None:
+            raise SafetyError("not_verified", f"{plan.plan_id} has no simulation result")
+        for ticket in reversed(list(self.approvals.values())):
+            if (ticket.plan_id == plan.plan_id and ticket.sim_id == sim.sim_id
+                    and ticket.approval_id not in self._decided):
+                return ticket
+        approval_id = f"AP-{len(self.approvals) + 1}"
+        ticket = ApprovalRequestMsg(approval_id=approval_id, plan_id=plan.plan_id, plan_hash=safety.plan_hash(plan),
+                                    sat_id=plan.sat_id, tier=2, sim_id=sim.sim_id)
+        self.approvals[approval_id] = ticket
+        return ticket
 
     def execute(self, approval_id: str, recorder: Recorder | None = None) -> dict[str, Any]:
         """Uplink and run a plan the Flight Director approved through `approve()`. Records an `execution` event
@@ -211,6 +260,7 @@ class Dispatcher:
         self._needs_rescore.pop(sat_id, None)
         return ToolOutcome(
             {
+                "sat_id": sat_id,
                 "scores": scores.scores,
                 "plausible": scores.plausible,
                 "labels": {h: HYPOTHESIS_LABELS[h] for h in scores.scores},
@@ -233,7 +283,19 @@ class Dispatcher:
         if sim.plan_id != plan.plan_id or sim.plan_hash != safety.plan_hash(plan):
             raise RuntimeError(f"verifier returned a result for another plan ({sim.plan_id})")
         self.record_sim(sim)
-        return ToolOutcome(sim.model_dump(), sim.plan_hash)
+        out = sim.model_dump()
+        rank = getattr(self.backend, "rank", None)
+        status = None
+        if callable(rank):
+            try:
+                status = getattr(rank(plan.sat_id), "status", None)
+            except (ValueError, LookupError):
+                status = None
+        if status is not None:
+            out["rank_status"] = status
+        if status == "infeasible" or self._failed_plans(plan.sat_id) >= MAX_FAILED_PLANS:
+            out["hint"] = _infeasible_hint(plan.sat_id, self._failed_plans(plan.sat_id))
+        return ToolOutcome(out, plan.plan_hash)
 
     def _tool_schedule_uplink(self, plan_id: Any) -> ToolOutcome:
         plan = self._verified(plan_id)
@@ -245,6 +307,7 @@ class Dispatcher:
             duration_s=UPLINK_DURATION_S,
         )
         # Re-solve with every pending request so station conflicts between satellites are resolved together.
+        # Executed plans are not re-solved: their slots stay fixed, and a new slot that overlaps one is refused.
         result = self.backend.schedule(list(self._schedule_requests.values()))
         contacts = self.backend.contacts()
         for a in result.assignments:  # the scheduler is checked too: every slot must be inside a contact
@@ -253,11 +316,30 @@ class Dispatcher:
                 raise RuntimeError(f"scheduler returned unknown plan {a.plan_id}")
             safety.check_assignment(a, req.sat_id, contacts)
         self.last_schedule = result
-        self.assignments = {a.plan_id: a for a in result.assignments}
+        now = self.backend.now()
+        fixed = {p: a for p, a in self._fixed.items() if a.end_t > now}
+        before = set(self.assignments)
+        self.assignments = dict(fixed)
+        self.assignments.update(
+            (a.plan_id, a) for a in result.assignments if not any(_overlap(a, f) for f in fixed.values())
+        )
+        bumped = sorted(p for p in before - set(self.assignments)
+                        if p != plan.plan_id and p not in self._executed_plans)
+        self.bumped.update(bumped)
+        self.bumped -= set(self.assignments)
         mine = self.assignments.get(plan.plan_id)
         out: dict[str, Any] = {"plan_id": plan.plan_id, "scheduled": mine is not None, "solver": result.solver}
         if mine is not None:
             out.update(station_id=mine.station_id, start_t=mine.start_t, end_t=mine.end_t)
+        else:
+            self._schedule_requests.pop(plan.plan_id, None)  # stop competing for a contact it cannot get
+            self._blocked.setdefault(plan.sat_id, set()).add((plan.uplink.station_id, plan.uplink.aos))
+            out["reason"] = (
+                f"no station is free for {plan.plan_id} in its {plan.uplink.station_id} contact (another plan has "
+                "priority); propose the same commands again to target the next contact, then simulate and schedule"
+            )
+        if bumped:
+            out["bumped"] = bumped
         return ToolOutcome(out, plan.plan_hash)
 
     def _tool_request_approval(self, plan_id: Any) -> ToolOutcome:
@@ -265,6 +347,8 @@ class Dispatcher:
         sim = self.sims[plan.plan_id]
         if plan.kind == "plan" and plan.sat_id in self._needs_rescore:
             raise ToolArgError(_rescore_message(plan.sat_id, self._needs_rescore[plan.sat_id]))
+        if plan.plan_id not in self.assignments:
+            raise ToolArgError(f"{plan.plan_id} has no uplink slot; call schedule_uplink first")
         tier, flight_rule = self.backend.tier(plan, sim)
         approval_id = f"AP-{len(self.approvals) + 1}"
         self.approvals[approval_id] = ApprovalRequestMsg(
@@ -293,8 +377,11 @@ class Dispatcher:
             raise ToolArgError("commands must be a non-empty list")
         if kind == "plan" and sat_id in self._needs_rescore:
             raise ToolArgError(_rescore_message(sat_id, self._needs_rescore[sat_id]))
+        safe = any(isinstance(c, Mapping) and c.get("name") == "SAFE_MODE" for c in commands)
+        if kind == "plan" and not safe and self._failed_plans(sat_id) >= MAX_FAILED_PLANS:
+            raise ToolArgError(_infeasible_hint(sat_id, self._failed_plans(sat_id)))
         now = self.backend.now()
-        uplink = self.backend.next_contact(sat_id, now)
+        uplink = self._next_uplink(sat_id, now)
         if uplink is None:
             raise ToolArgError(f"{sat_id} has no contact window left in the horizon")
         start = max(uplink.aos, now)  # never time-tag a command in the past, even when the pass is in progress
@@ -310,6 +397,25 @@ class Dispatcher:
         safety.check_plan(plan, self.backend.contacts(), now=now)
         self.plans[plan_id] = plan
         return ToolOutcome({"plan_id": plan_id}, plan.plan_hash)
+
+    def _failed_plans(self, sat_id: str) -> int:
+        """Recovery plans (not SAFE_MODE, not diagnostics) for this satellite whose latest simulation failed."""
+        return sum(
+            1 for pid, sim in self.sims.items()
+            if not sim.passes_all and self.plans[pid].sat_id == sat_id and self.plans[pid].kind == "plan"
+            and not any(c.name == "SAFE_MODE" for c in self.plans[pid].commands)
+        )
+
+    def _next_uplink(self, sat_id: str, now: float) -> Any:
+        """Next contact for the uplink, skipping contacts where this satellite could not get a station."""
+        blocked = self._blocked.get(sat_id, set())
+        t = now
+        for _ in range(50):
+            c = self.backend.next_contact(sat_id, t)
+            if c is None or (c.station_id, c.aos) not in blocked:
+                return c
+            t = max(t, c.los) + 1.0
+        return None
 
     def _diagnostic_steps(self, commands: list[Any], start: float, uplink: Any) -> list[Any]:
         """Untagged steps run one DIAGNOSTIC_STEP_S apart, after one step of lead time for the uplink; the test,
@@ -331,7 +437,10 @@ class Dispatcher:
         plan = self.plans[ticket.plan_id]
         t_done = float(self.backend.execute(plan))
         self._executed.add(approval_id)
-        self._schedule_requests.pop(plan.plan_id, None)  # its uplink happened; stop re-solving for it
+        self._executed_plans.add(plan.plan_id)
+        self._schedule_requests.pop(plan.plan_id, None)
+        if plan.plan_id in self.assignments:  # keep the station booked for this uplink: no other plan may take it
+            self._fixed[plan.plan_id] = self.assignments[plan.plan_id]
         if plan.kind == "diagnostic":
             self._needs_rescore[plan.sat_id] = plan.plan_id
         return {
@@ -368,15 +477,29 @@ class Dispatcher:
         return plan
 
     def _priority(self, sat_id: str) -> float:
-        return next((e.priority for e in self.backend.triage() if e.sat_id == sat_id), 0.0)
+        """Scheduler weight (higher = more important, backend/sched) from the triage rank (1 = most urgent)."""
+        rank = next((e.priority for e in self.backend.triage() if e.sat_id == sat_id), None)
+        if rank is None:
+            return 0.01  # not in the triage queue: lowest weight
+        return 1.0 / rank if rank >= 1.0 else 1.0
 
 
 # ---------------------------------------------------------------------- arg parsing
+def _overlap(a: Assignment, b: Assignment) -> bool:
+    return a.station_id == b.station_id and a.start_t < b.end_t and b.start_t < a.end_t
+
+
 def _uplink_deadline(plan: Plan) -> float:
     """A diagnostic must be uplinked before its first step; a plan any time inside its contact."""
     if plan.kind == "diagnostic":
         return min(plan.uplink.los, min(c.t_exec for c in plan.commands))
     return plan.uplink.los
+
+
+def _infeasible_hint(sat_id: str, n_failed: int) -> str:
+    return (f"{n_failed} recovery plans for {sat_id} failed verification: stop searching. The situation is "
+            f"infeasible: propose SAFE_MODE for {sat_id} if you have not, simulate, schedule it, request approval, "
+            "and say it is infeasible and that you recommend SAFE_MODE.")
 
 
 def _rescore_message(sat_id: str, plan_id: str) -> str:

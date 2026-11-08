@@ -1,0 +1,19 @@
+{
+  "response": {
+    "tool_calls": [
+      {
+        "args": {
+          "commands": [
+            {
+              "name": "SAFE_MODE"
+            }
+          ],
+          "sat_id": "SAT-09"
+        },
+        "name": "propose_plan"
+      }
+    ]
+  },
+  "selected_plan_id": "P-3",
+  "source": "runs/demo/live-single-stuck-load.jsonl"
+}

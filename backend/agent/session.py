@@ -6,6 +6,7 @@
 
 `record_run(model, dispatcher)` runs the loop with a `FlightRecorder` writing `runs/<run_id>.jsonl`, so every live
 run is recorded. `on_event` receives each RecorderEvent as it is written (the API streams them as `trace_event`).
+`fleet=True` works the triage queue satellite by satellite (fleet.run_fleet) into the same single record.
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .dispatcher import Dispatcher
+from .fleet import FleetRun, run_fleet
 from .loop import AgentRun, run_agent
 from .model import Model
 from .prompt import DEFAULT_GOAL
@@ -24,7 +26,7 @@ from .stub import StubModel
 
 @dataclass(frozen=True)
 class RecordedRun:
-    run: AgentRun
+    run: AgentRun | FleetRun
     run_id: str
     path: Path
 
@@ -71,6 +73,7 @@ def record_run(
     runs_dir: str | Path = "runs",
     on_event: Callable[[Any], None] | None = None,
     goal: str = DEFAULT_GOAL,
+    fleet: bool = False,
 ) -> RecordedRun:
     from backend.recorder import FlightRecorder
 
@@ -78,5 +81,5 @@ def record_run(
     path = Path(runs_dir) / f"{run_id}.jsonl"
     with FlightRecorder(run_id, path=path) as flight:
         recorder = _Tee(flight, on_event) if on_event is not None else flight
-        run = run_agent(model, dispatcher, recorder, goal=goal)
+        run = run_fleet(model, dispatcher, recorder) if fleet else run_agent(model, dispatcher, recorder, goal=goal)
     return RecordedRun(run=run, run_id=run_id, path=path)

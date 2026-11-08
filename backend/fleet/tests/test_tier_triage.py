@@ -89,14 +89,14 @@ def test_triage_orders_by_severity_then_slack():
 # ---------------- backend bookkeeping ----------------
 
 def test_status_flow_through_the_backend():
-    sc = scenarios.build("single-stuck-load", seed=0, sat_ids=("SAT-03", "SAT-12", "SAT-17"))
+    sc = scenarios.build("single-stuck-load", seed=0, sat_ids=("SAT-03", "SAT-09", "SAT-12"))
     be = FleetBackend(sc)
-    t, _ = demo.until_alert(be, "SAT-17")
-    assert [(e.sat_id, e.status) for e in be.triage()] == [("SAT-17", "queued")]
-    be.score_hypotheses("SAT-17")
+    t, _ = demo.until_alert(be, "SAT-09")
+    assert [(e.sat_id, e.status) for e in be.triage()] == [("SAT-09", "queued")]
+    be.score_hypotheses("SAT-09")
     assert be.triage()[0].status == "working"
-    c = be.next_contact("SAT-17", t)
-    p = Plan(plan_id="P-1", sat_id="SAT-17", kind="plan", uplink=c, created_by="test",
+    c = be.next_contact("SAT-09", t)
+    p = Plan(plan_id="P-1", sat_id="SAT-09", kind="plan", uplink=c, created_by="test",
              commands=[Command(t_exec=t + 60, name="LOAD_OFF", args={"load": "PAYLOAD"})])
     r = be.simulate(p, "all", 20)
     assert be.tier(p, r) == (2, None) and be.triage()[0].status == "awaiting_approval"
@@ -105,12 +105,12 @@ def test_status_flow_through_the_backend():
     # a result the verifier did not produce never earns Tier 1
     assert be.tier(p, sim(p, margin=0.9).model_copy(update={"sim_id": "S-99"})) == (2, None)
     with pytest.raises(Exception):
-        be.mark("SAT-17", "not-a-status")
+        be.mark("SAT-09", "not-a-status")
 
 
 # ---------------- peer comparison ----------------
 
-PEERS = ("SAT-03", "SAT-12", "SAT-17", "SAT-21")
+PEERS = ("SAT-03", "SAT-12", "SAT-09", "SAT-21")
 
 
 @pytest.fixture(scope="module")

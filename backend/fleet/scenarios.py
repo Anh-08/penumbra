@@ -1,4 +1,4 @@
-"""Demo scenarios (CONTRACTS.md): single-stuck-load here; fault-storm and beta-season come with T27.
+"""Demo scenarios (CONTRACTS.md): single-stuck-load, fault-storm and beta-season.
 
 This is the one place outside backend/eps that writes fault specs: a scenario has to say what goes
 wrong. They go straight into an EpsWorld, which keeps them private; nothing here hands them out
@@ -83,30 +83,77 @@ def synthetic_environment(sat_ids: tuple[str, ...], hours: float = 24.0, beta_de
     return env, contacts_from_mask(env.t, env.in_contact, env.sat_ids), None
 
 
-def single_stuck_load(seed: int = 0, sat_ids: tuple[str, ...] = SAT_IDS, hours: float = 24.0) -> Scenario:
-    """SAT-17's AUX relay sticks on two hours in, while it flies the payload at full duty.
+def single_stuck_load(seed: int = 0, sat_ids: tuple[str, ...] = SAT_IDS, hours: float = 24.0,
+                      focus: str | None = None) -> Scenario:
+    """SAT-09's AUX line (25 W) sticks on two hours in, while it flies the payload at full duty.
 
-    SAT-17 (beta about 1 deg, 40 % of each orbit in shadow) is the tightest power budget in the fleet.
-    Healthy, it carries payload duty 1.0 (SOC stays above 0.5); with 10 W of AUX it does not, and SOC
-    reaches the 0.30 floor about 3.5 h after onset. LOAD_OFF(AUX) cannot help (the relay is stuck);
-    cutting the payload duty can. Every other satellite flies duty 0.5 and stays healthy.
+    SAT-09 (beta about 42 deg, 35 % of each orbit in shadow) carries duty 1.0 when healthy. With the AUX
+    line stuck on it does not: SOC heads for the 0.30 floor within about three hours of onset.
+    LOAD_OFF(AUX) cannot help (the relay is stuck); cutting the payload duty or switching the payload off
+    can. Every other satellite flies duty 0.5 and stays healthy.
+
+    `focus` moves the fault elsewhere; a fleet subset without SAT-09 (one-satellite benchmarks) puts it on
+    its first satellite.
     """
-    focus = "SAT-17"
     sat_ids = tuple(sat_ids)
+    focus = focus or ("SAT-09" if "SAT-09" in sat_ids else sat_ids[0])
     if focus not in sat_ids:
-        raise ValueError(f"single-stuck-load needs {focus} in the fleet")
-    env, contacts, model = orbit_environment(sat_ids, hours=hours)
-    # the fault: AUX stuck on from T0 + 2 h (kept inside the world from here on)
-    world = EpsWorld(env, [FaultSpec(kind="stuck_on_load", target=focus, params={"load": "AUX"},
-                                     onset_t=T0 + 2 * 3600.0)], seed=seed, soc0=0.75)
+        raise ValueError(f"single-stuck-load: focus {focus} is not in the fleet")
+    faults_ = [FaultSpec(kind="stuck_on_load", target=focus, params={"load": "AUX"}, onset_t=T0 + 2 * 3600.0)]
     # standing tasking, known to the ground: the focus satellite flies its payload at full duty
-    world.execute(focus, [Command(t_exec=T0, name="SET_PAYLOAD_DUTY", args={"duty": 1.0})])
-    initial = InitialState.nominal(len(sat_ids), soc=0.75, params=planning_params())
-    return Scenario(name="single-stuck-load", seed=seed, env=env, contacts=contacts, world=world,
-                    focus_sat=focus, initial=initial, orbit=model)
+    tasking = {focus: [Command(t_exec=T0, name="SET_PAYLOAD_DUTY", args={"duty": 1.0})]}
+    return _world("single-stuck-load", seed, sat_ids, hours, faults_, soc0={focus: 0.80}, tasking=tasking,
+                  focus=focus)
 
 
-SCENARIOS = {"single-stuck-load": single_stuck_load}
+STORM_ONSET_S = 2 * 3600.0
+
+
+def _world(name, seed, sat_ids, hours, faults_, soc0, tasking, focus=None) -> Scenario:
+    env, contacts, model = orbit_environment(tuple(sat_ids), hours=hours)
+    soc = np.array([soc0.get(s, 0.75) for s in env.sat_ids])
+    world = EpsWorld(env, faults_, seed=seed, soc0=soc)
+    for s, cmds in tasking.items():
+        if s in env.sat_ids:
+            world.execute(s, cmds)
+    initial = InitialState.nominal(len(env.sat_ids), soc=soc, params=planning_params())
+    return Scenario(name=name, seed=seed, env=env, contacts=contacts, world=world, focus_sat=focus,
+                    initial=initial, orbit=model)
+
+
+def fault_storm(seed: int = 0, sat_ids: tuple[str, ...] = SAT_IDS, hours: float = 24.0) -> Scenario:
+    """Three faults at once, T0 + 2 h, with three outcomes by design (CONTRACTS.md):
+
+    - SAT-12 (beta 43 deg, 35 % shadow) loses a quarter of its array while flying the payload at full
+      duty: a duty cut fixes it with a wide margin, so a flight rule (FR-3) auto-executes it (Tier 1).
+    - SAT-07 (79 % sun) has its 25 W AUX line stuck on while flying at full duty from a low SOC: the fix
+      commands the suspect unit, so the Flight Director must approve it (Tier 2).
+    - SAT-19 (39 % shadow) has lost 70 % of its capacity and its SOC reads 0.15 high: no plan that keeps
+      the payload passes every plausible hypothesis, so the verifier says infeasible and SAFE_MODE.
+    Everyone else flies duty 0.5 and stays healthy.
+    """
+    onset = T0 + STORM_ONSET_S
+    faults_ = [
+        FaultSpec(kind="array_degradation", target="SAT-12", params={"loss": 0.25, "panel": "ALL"}, onset_t=onset),
+        FaultSpec(kind="stuck_on_load", target="SAT-07", params={"load": "AUX"}, onset_t=onset),
+        FaultSpec(kind="capacity_fade", target="SAT-19", params={"remaining": 0.30}, onset_t=onset),
+        FaultSpec(kind="sensor_bias", target="SAT-19", params={"channel": "soc", "bias": 0.15}, onset_t=onset),
+    ]
+    full = [Command(t_exec=T0, name="SET_PAYLOAD_DUTY", args={"duty": 1.0})]
+    return _world("fault-storm", seed, sat_ids, hours, faults_,
+                  soc0={"SAT-12": 0.80, "SAT-07": 0.50, "SAT-19": 0.70},
+                  tasking={"SAT-12": full, "SAT-07": full, "SAT-19": full}, focus=None)
+
+
+def beta_season(seed: int = 0, sat_ids: tuple[str, ...] = SAT_IDS, hours: float = 24.0) -> Scenario:
+    """The whole fleet's beta drifts 40 deg from its design attitude at T0 + 2 h (cos 40 = 0.77 of the
+    array): an environmental cause that peer comparison must attribute to the fleet, not to hardware."""
+    faults_ = [FaultSpec(kind="beta_season", target="FLEET", params={"extra_beta_deg": 40.0},
+                         onset_t=T0 + STORM_ONSET_S)]
+    return _world("beta-season", seed, sat_ids, hours, faults_, soc0={}, tasking={}, focus=None)
+
+
+SCENARIOS = {"single-stuck-load": single_stuck_load, "fault-storm": fault_storm, "beta-season": beta_season}
 
 
 def build(name: str, seed: int = 0, **kw) -> Scenario:

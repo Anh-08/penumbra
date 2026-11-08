@@ -2,7 +2,9 @@
 
 A plan is Tier 1 when it passed verification and one rule covers every command in it; it then
 auto-executes and the trace shows the rule id. Everything else is Tier 2 and waits for the Flight
-Director. SAFE_MODE, LOAD_ON, heater changes and duty increases are never Tier 1.
+Director. SAFE_MODE, LOAD_ON, heater changes and duty increases are never Tier 1, and neither is a plan
+that commands a load the scorer suspects is stuck (H2 plausible): commanding a suspected-faulty unit
+is not routine. Diagnostics (FR-1) are exempt: testing that unit is their job.
 
 - FR-1 verified diagnostic: kind "diagnostic", uplinked in the pass in progress, every step inside that
   pass, commands on non-essential loads only, no state held longer than one dwell.
@@ -24,6 +26,7 @@ from backend.verify import constants as K
 class RuleContext:
     now: float
     commanded_duty: float      # payload duty commanded on this satellite right now
+    suspect_loads: frozenset = frozenset()   # loads a plausible H2 says may be stuck on
 
 
 @dataclass(frozen=True)
@@ -58,7 +61,8 @@ def _diagnostic(plan: Plan, sim: SimResult, ctx: RuleContext) -> bool:
 
 
 def _duty_cut(c, ctx: RuleContext) -> bool:
-    return c.name == "SET_PAYLOAD_DUTY" and float(c.args["duty"]) < ctx.commanded_duty
+    return (c.name == "SET_PAYLOAD_DUTY" and float(c.args["duty"]) < ctx.commanded_duty
+            and "PAYLOAD" not in ctx.suspect_loads)
 
 
 def _duty_reduction(plan: Plan, sim: SimResult, ctx: RuleContext) -> bool:
@@ -68,7 +72,8 @@ def _duty_reduction(plan: Plan, sim: SimResult, ctx: RuleContext) -> bool:
 
 def _load_shed(plan: Plan, sim: SimResult, ctx: RuleContext) -> bool:
     return (plan.kind == "plan" and bool(plan.commands) and _verified(sim, K.TIER1_MARGIN)
-            and all(_duty_cut(c, ctx) or (c.name == "LOAD_OFF" and c.args["load"] == "AUX") for c in plan.commands))
+            and all(_duty_cut(c, ctx) or (c.name == "LOAD_OFF" and c.args["load"] == "AUX"
+                                          and "AUX" not in ctx.suspect_loads) for c in plan.commands))
 
 
 FLIGHT_RULES: tuple[FlightRule, ...] = (
