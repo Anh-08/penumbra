@@ -54,6 +54,6 @@ export function SocChart({ trajectory, telemetry, truthSoc, socMin, planId, hypo
         cx={xFor(point.t, first, last)} cy={yFor(point.soc)} r="3" />)}
       {truthPath && <path className="chart-truth" d={truthPath} />}
     </svg>
-    <div className="chart-key"><span>p5–p95 verifier band</span><span>● downlinked only</span>{truthPath && <span>— simulated truth</span>}</div>
+    <div className="chart-key"><span>p5–p95 verifier band</span>{truthPath && <span>— actual battery</span>}</div>
   </section>;
 }
