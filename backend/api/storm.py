@@ -16,6 +16,11 @@ Dispatcher whose triage shows only that satellite) when its alert comes. Differe
   With the recorded run that is: SAT-12 (Tier 1, auto) -> SAT-07 (approval) -> SAT-19 (infeasible, SAFE_MODE
   recommended) -> fastforward -> reveal. Approving right after the run is also what the recording did.
 
+T42: `start(live, sats)` runs the judge's incident (scenario `custom`, built by the provider) the same way for the
+chosen satellites. A custom incident has no recording, so it runs live only: without a model it fails and says so,
+it never replays the storm. With several Tier 2 satellites the director enters `approval` once per satellite, in
+the order their alerts come.
+
 Demo states and clock speeds follow CONTRACTS (DEMO_SPEED). Sim time is frozen while the agent works.
 Pacing: model turns are PENUMBRA_REPLAY_PACE_MS apart (default 700); the clock moves at the state's speed.
 PENUMBRA_REPLAY_PACE_MS=0 runs everything as fast as possible (tests, benchmarks).
@@ -27,7 +32,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
 from contracts import DEMO_SPEED, HYPOTHESIS_LABELS, CalloutMsg, ExecutionMsg, HypothesesMsg, MatrixMsg, SimResult
 
@@ -77,15 +82,25 @@ class StormDirector:
         self._t_start = 0.0
         self._current: str | None = None
         self._sims: dict[str, list[dict]] = {}
+        self._sats: tuple[str, ...] = ()
+        self._replay_ok = True
 
     # ---------------------------------------------------------------- control
     @property
     def busy(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
 
-    def start(self, live: bool) -> None:
+    def start(self, live: bool, sats: Sequence[str] | None = None) -> None:
+        """Run the storm satellites (sats None: the recorded storm, which may replay) or the judge's chosen
+        satellites (T42: live only). The provider has already built and frozen the matching scenario."""
+        from backend.fleet.demo import STORM_SATS
+
         if self.busy:
             raise RuntimeError("a fault storm is already running")
+        self._sats = tuple(STORM_SATS if sats is None else sats)
+        self._replay_ok = sats is None
+        if not self._sats:
+            raise ValueError("no satellites to work")
         self.status = StormStatus(running=True, phase="storm")
         self.pending, self.approved_sat = None, None
         self._approved.clear()
@@ -116,10 +131,12 @@ class StormDirector:
         from backend.agent.session import select_model
         from backend.recorder import ReplayModel
 
-        if live:
+        if live or not self._replay_ok:
             try:
                 return select_model(live=True), "live"
             except GeminiConfigError as exc:
+                if not self._replay_ok:  # a custom incident has no recording to fall back to
+                    raise RuntimeError(f"live planning is unavailable ({exc})") from exc
                 self.publish("callout", CalloutMsg(text=f"Run live unavailable ({exc}); replaying the recorded "
                                                         "storm instead.", priority=2))
         return ReplayModel(self.replay_path, pace_ms=pace_ms()), "replay"
@@ -130,8 +147,9 @@ class StormDirector:
         except Exception as exc:  # noqa: BLE001 - the demo must say what happened, not die silently
             self.status.error = f"{type(exc).__name__}: {exc}"
             self.status.phase = "failed"
-            self.publish("callout", CalloutMsg(text=f"Fault storm stopped: {type(exc).__name__}. "
-                                                    "Press FAULT STORM to replay the recorded run.", priority=1))
+            self.publish("callout", CalloutMsg(text=f"Incident stopped: {type(exc).__name__}. "
+                                                    "Press START INCIDENT to run it again, or run the recorded "
+                                                    "incident.", priority=1))
         finally:
             self.status.running = False
 
@@ -139,13 +157,12 @@ class StormDirector:
         from backend.agent.dispatcher import Dispatcher
         from backend.agent.loop import run_agent
         from backend.agent.session import TeeRecorder, model_kind, new_run_id
-        from backend.fleet.demo import STORM_SATS
         from backend.recorder import FlightRecorder
 
         provider = self.provider
         model, mode = self.choose_model(live)
         self.status.mode = mode
-        run_id = new_run_id(f"storm-{model_kind(model)}")
+        run_id = new_run_id(f"{'storm' if self._replay_ok else 'incident'}-{model_kind(model)}")
         path = Path(self.runs_dir) / f"{run_id}.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
         self.status.run_id, self.status.path = run_id, str(path)
@@ -158,7 +175,7 @@ class StormDirector:
         with FlightRecorder(run_id, path=path) as flight:
             recorder = TeeRecorder(flight, self._on_event)
             t = backend.now()
-            while len(self.status.outcomes) < len(STORM_SATS) and t < end:
+            while len(self.status.outcomes) < len(self._sats) and t < end:
                 tick = time.monotonic()
                 t = min(t + STEP_S, end)
                 with provider.lock:
@@ -170,7 +187,7 @@ class StormDirector:
                         flight.record("alert", m["data"].model_dump(mode="json"))
                     self.publish(m["type"], m["data"])
                 alerted = {e.sat_id: e for e in triage}
-                todo = [s for s in [e.sat_id for e in triage] if s in STORM_SATS and s not in self.status.outcomes]
+                todo = [s for s in [e.sat_id for e in triage] if s in self._sats and s not in self.status.outcomes]
                 for sat in todo:
                     if alerted[sat].severity not in ("warning", "critical"):
                         continue
@@ -186,7 +203,9 @@ class StormDirector:
                         if self._cancel.is_set():
                             return
                         self.status.outcomes[sat]["executed"] = True
-                    if len(self.status.outcomes) < len(STORM_SATS):
+                        self.pending = None  # the next Tier 2 satellite (custom incident) gets its own approval
+                        self._approved.clear()
+                    if len(self.status.outcomes) < len(self._sats):
                         self._phase("storm")
                 provider.snapshot()
                 if self._cancel.is_set():
