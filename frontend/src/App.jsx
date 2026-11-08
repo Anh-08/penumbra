@@ -12,6 +12,9 @@ import {
   createAnatomyState, keyAction, loadEnabled as loadAnatomyEnabled, reduceAnatomy, saveEnabled as saveAnatomyEnabled,
 } from './anatomy/anatomyState.js';
 import { createVoicePlayer, loadMuted, saveMuted, shouldSpeak } from './voice.js';
+import {
+  createMcState, loadEnabled as loadMcEnabled, reduceMc, saveEnabled as saveMcEnabled,
+} from './montecarlo/mcState.js';
 import { MatrixOverlay } from './Matrix.jsx';
 import { FlightOverlay } from './FlightOverlay.jsx';
 import {
@@ -22,6 +25,9 @@ import {
 const AnatomyView = lazy(() => import('./anatomy/AnatomyView.jsx'));
 const AnatomyCard = lazy(() => import('./anatomy/AnatomyCard.jsx'));
 const ANATOMY_CARD_DELAY_MS = 1500;  // after first paint: the thumbnail never slows the boot
+// MONTE CARLO grid (T38): lazy as well; it mounts the first time a plan is simulated with MC VIEW on.
+const MonteCarloOverlay = lazy(() => import('./montecarlo/MonteCarloOverlay.jsx'));
+const MC_TICK_MS = 200;
 
 const initialTime = Date.now() / 1000;
 const initialFleet = buildFleetState(initialTime);
@@ -61,6 +67,10 @@ function App() {
   });
   const dispatchAnatomy = useCallback((action) => dispatchAnatomyRaw(action), []);
   const [anatomyCardReady, setAnatomyCardReady] = useState(false);
+  const [mc, dispatchMc] = useReducer(reduceMc, undefined, () => {
+    try { return createMcState(loadMcEnabled(window.localStorage)); } catch { return createMcState(); }
+  });
+  const [mcMounted, setMcMounted] = useState(false);
   const [attemptPlanId, setAttemptPlanId] = useState(null);
   const [pending, setPending] = useState(false);
   const [actionError, setActionError] = useState(null);
@@ -99,6 +109,7 @@ function App() {
         try { message = JSON.parse(event.data); } catch { return; }
         if (!message?.type || !message?.data) return;
         dispatchMatrix(message);
+        dispatchMc({ type: 'message', message, now: performance.now() });
         dispatchFlight(message);
         if (message.type === 'fleet_state') {
           const flightStep = directed.current ? null : fastForward.current;
@@ -153,6 +164,18 @@ function App() {
 
   useEffect(() => { scene.current?.setSkyVisible?.(skyVisible); }, [skyVisible]);
 
+  useEffect(() => { dispatchMc({ type: 'phase', phase: panel.phase }); }, [panel.phase]);
+  // Warm the MC chunk (and three) once a storm starts, so the grid is ready at the first simulate.
+  useEffect(() => {
+    if (mc.enabled && ['storm', 'agent', 'approval'].includes(panel.phase)) setMcMounted(true);
+  }, [mc.enabled, panel.phase]);
+  useEffect(() => {
+    if (!mc.open) return undefined;
+    setMcMounted(true);
+    const timer = window.setInterval(() => dispatchMc({ type: 'tick', now: performance.now() }), MC_TICK_MS);
+    return () => window.clearInterval(timer);
+  }, [mc.open]);
+
   useEffect(() => {
     const timer = window.setTimeout(() => setAnatomyCardReady(true), ANATOMY_CARD_DELAY_MS);
     return () => window.clearTimeout(timer);
@@ -173,6 +196,11 @@ function App() {
   function toggleAnatomy() {
     saveAnatomyEnabled(window.localStorage, !anatomy.enabled);
     dispatchAnatomy({ type: 'toggle_chip' });
+  }
+
+  function toggleMc() {
+    saveMcEnabled(window.localStorage, !mc.enabled);
+    dispatchMc({ type: 'toggle_chip' });
   }
 
   function toggleSky() {
@@ -264,6 +292,7 @@ function App() {
       hasVerification={matrixOpen || panel.trace.some((row) => row.tool === 'simulate')}
       skyVisible={skyVisible} onToggleSky={toggleSky}
       anatomyOn={anatomy.enabled} onToggleAnatomy={toggleAnatomy}
+      mcOn={mc.enabled} onToggleMc={toggleMc}
       muted={muted} onToggleVoice={toggleVoice} />
     {reconnecting && hasApiFleet.current && <div className="reconnect-badge" role="status">RECONNECTING · showing last state</div>}
 
@@ -301,6 +330,10 @@ function App() {
     {(!showPanels || panel.phase === 'reveal') && <ScalePanel />}
     {anatomy.enabled && anatomyCardReady && !showPanels && <Suspense fallback={null}>
       <AnatomyCard onOpen={() => dispatchAnatomy({ type: 'open' })} />
+    </Suspense>}
+    {mcMounted && <Suspense fallback={null}>
+      <MonteCarloOverlay state={mc} dispatch={dispatchMc} visible={mc.open && !flightOpen}
+        legend={<ProvenanceLegend localPreview={localPreview} />} />
     </Suspense>}
     <ProvenanceLegend localPreview={localPreview} />
     {anatomy.open && <Suspense fallback={<div className="anatomy-view anatomy-loading" role="status">Loading the anatomy view…</div>}>

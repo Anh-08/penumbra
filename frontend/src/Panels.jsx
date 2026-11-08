@@ -103,7 +103,7 @@ export function ProvenanceLegend({ localPreview }) {
 }
 
 export function TopBar({ phase, mode, time, speed, hasVerification, muted, onToggleVoice,
-  skyVisible, onToggleSky, anatomyOn, onToggleAnatomy }) {
+  skyVisible, onToggleSky, anatomyOn, onToggleAnatomy, mcOn, onToggleMc }) {
   const activeStage = phase === 'approval' || phase === 'fastforward' || phase === 'reveal'
     ? 2 : hasVerification ? 1 : 0;
   const complete = phase === 'fastforward' || phase === 'reveal';
@@ -117,6 +117,8 @@ export function TopBar({ phase, mode, time, speed, hasVerification, muted, onTog
         title="Toggle constellation lines" onClick={onToggleSky}>SKY</button>
       {onToggleAnatomy && <button type="button" className="sky-chip" aria-pressed={anatomyOn}
         title="Satellite anatomy: card on the attract screen, press A to open" onClick={onToggleAnatomy}>ANATOMY</button>}
+      {onToggleMc && <button type="button" className="sky-chip" aria-pressed={mcOn}
+        title="Monte Carlo grid while physics verifies a plan (illustrative)" onClick={onToggleMc}>MC VIEW</button>}
       {onToggleVoice && <button type="button" className="voice-chip" aria-pressed={!muted}
         title="Voice callouts (captions always show)" onClick={onToggleVoice}>{muted ? 'VOICE OFF' : 'VOICE ON'}</button>}<time className="num">{timeLabel(time)} UTC</time><span className="speed-chip num">{speed === 0 ? 'PAUSED' : `${speed}×`}</span></div>
   </header>;
