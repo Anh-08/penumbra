@@ -4,7 +4,9 @@ import { createScene } from './scene.js';
 import { connectFleetSocket } from './fleetSocket.js';
 import { createPanelState, reducePanel } from './panelState.js';
 import { createMatrixState, reduceMatrix, scheduleConflicts, worstPlausibleHypothesis } from './matrixState.js';
-import { advanceEclipse, approvalPayload, createFlightState, reduceFlight, ticketKey } from './flightState.js';
+import {
+  advanceEclipse, approvalPayload, createFlightState, flightFocus, reduceFlight, ticketKey,
+} from './flightState.js';
 import { ScalePanel } from './ScalePanel.jsx';
 import { createVoicePlayer, loadMuted, saveMuted, shouldSpeak } from './voice.js';
 import { MatrixOverlay } from './Matrix.jsx';
@@ -163,7 +165,7 @@ function App() {
     setPending(true);
     setActionError(null);
     try {
-      const data = await postJson('/api/reveal', { sat_id: selected });
+      const data = await postJson('/api/reveal', { sat_id: focus.satId });
       dispatchFlight({ type: 'reveal', data });
     } catch (error) { setActionError(error.message); }
     finally { setPending(false); }
@@ -191,11 +193,11 @@ function App() {
   const activeMatrix = matrix.bySat[selected];
   const matrixOpen = Boolean(activeMatrix?.results.length);
   const flightOpen = panel.phase === 'fastforward' || panel.phase === 'reveal';
-  const activeResult = activeMatrix?.results.find((result) => result.plan_id === selectedPlanId)
-    ?? activeMatrix?.results[0];
-  const chartResult = activeMatrix?.complete ? activeMatrix.results[0] : null;
-  const activeApproval = activeResult ? flight.approvals[ticketKey(selected, activeResult.plan_id)] ?? null : null;
-  const activeRefusal = attemptPlanId === activeResult?.plan_id ? flight.refusal : null;
+  const focus = flightFocus({ phase: panel.phase, selected, selectedPlanId, flight, matrixBySat: matrix.bySat });
+  const activeResult = focus.result ?? undefined;
+  const chartResult = focus.chartResult;
+  const activeApproval = focus.approval;
+  const activeRefusal = !focus.following && attemptPlanId === activeResult?.plan_id ? flight.refusal : null;
   const showPanels = matrixOpen || flightOpen || panel.phase !== 'attract' || panel.alerts.length > 0 || panel.trace.length > 0
     || Object.keys(panel.hypotheses).length > 0;
   const daylight = fleet.sats.filter((sat) => sat.illum >= 0.95).length;
@@ -241,9 +243,9 @@ function App() {
       trajectory={flight.trajectory} telemetry={flight.telemetry[selected]} socMin={SOC_MIN}
       chartPlanId={chartResult?.plan_id} chartHypothesis={worstPlausibleHypothesis(chartResult)} />}
 
-    {flightOpen && <FlightOverlay phase={panel.phase} satId={selected}
-      trajectory={flight.trajectory} telemetry={flight.telemetry[selected]}
-      reveal={flight.reveals[selected]} socMin={SOC_MIN}
+    {flightOpen && <FlightOverlay phase={panel.phase} satId={focus.satId}
+      trajectory={flight.trajectory} telemetry={flight.telemetry[focus.satId]}
+      reveal={flight.reveals[focus.satId]} socMin={SOC_MIN}
       chartPlanId={chartResult?.plan_id} chartHypothesis={worstPlausibleHypothesis(chartResult)} />}
 
     {(!showPanels || panel.phase === 'reveal') && <ScalePanel />}
