@@ -8,8 +8,8 @@ from bench.run import load_cached_proposal, run_benchmark
 
 def test_cached_gemini_proposal_is_an_allowlisted_command() -> None:
     command = load_cached_proposal(sat_id=build("single-stuck-load").focus_sat)
-    assert command.name == "LOAD_OFF"
-    assert command.args == {"load": "PAYLOAD"}
+    assert command.name == "SAFE_MODE"
+    assert command.args == {}
 
 
 def test_four_arms_share_seeded_truth_trials(tmp_path: Path) -> None:
