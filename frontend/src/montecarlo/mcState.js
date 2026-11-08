@@ -5,7 +5,10 @@
 
 export const TILE_COUNT = 20;
 export const SAMPLES_PER_HYPOTHESIS = 100;   // backend/verify/constants.py MONTE_CARLO_N
-export const FADE_MS = 1500;                 // fade out this long after the matrix is complete
+export const FADE_MS = 1500;                 // fade out this long after an execution or a collapsed sample
+// After the matrix is complete the grid stays this long so the judge can read it (was FADE_MS). While the
+// satellite waits for the human's approval the grid is held open until the execution message arrives.
+export const HOLD_MS = 6000;
 // The agent often simulates several plans in one model turn. Each plan is shown for at least this long (the queue
 // lives in the overlay only: the director never waits for it).
 export const DWELL_MS = 1400;
@@ -112,13 +115,14 @@ export function socCue(hyp, tSeconds, outcome = 'unknown', resolvedFor = null) {
 
 export function createMcState(enabled = true) {
   return { enabled, mode: '3d', phase: 'attract', agentSat: null, open: false, satId: null, planId: null,
-    run: 0, startedAt: null, queue: [], results: {}, hypotheses: {}, complete: false, closeAt: null, expanded: null };
+    run: 0, startedAt: null, queue: [], results: {}, hypotheses: {}, complete: false, closeAt: null, expanded: null,
+    held: false };
 }
 
 const key = (satId, planId) => `${satId}|${planId}`;
 
 function close(state) {
-  return { ...state, open: false, closeAt: null, expanded: null, queue: [] };
+  return { ...state, open: false, closeAt: null, expanded: null, queue: [], held: false };
 }
 
 function startRun(state, satId, planId, now) {
@@ -177,7 +181,7 @@ export function reduceMc(state, action) {
         ? { ...state, expanded: action.tile } : state;
     case 'collapse':
       return { ...state, expanded: null,
-        closeAt: state.open && state.complete ? (action.now ?? 0) + FADE_MS : state.closeAt };
+        closeAt: state.open && state.complete && !state.held ? (action.now ?? 0) + FADE_MS : state.closeAt };
     case 'tick': {
       if (!state.open) return state;
       const dwelt = action.now - (state.startedAt ?? action.now) >= DWELL_MS;
@@ -204,8 +208,13 @@ function onMessage(state, message, now) {
       return withPhase(state, data.state);
     case 'alert':
       return state.phase === 'attract' ? withPhase(state, 'storm') : state;
-    case 'approval_request':
-      return withPhase(state, 'approval');
+    case 'approval_request': {  // the human decides now: hold the grid for this satellite until it executes
+      const next = withPhase(state, 'approval');
+      return next.open && data.sat_id === next.satId ? { ...next, held: true, closeAt: null } : next;
+    }
+    case 'execution':
+      return state.open && state.held && data.sat_id === state.satId
+        ? { ...state, held: false, closeAt: now + FADE_MS } : state;
     case 'hypotheses':
       return { ...state, hypotheses: { ...state.hypotheses, [data.sat_id]: data } };
     case 'trace_event':
@@ -213,7 +222,7 @@ function onMessage(state, message, now) {
     case 'matrix': {
       const next = storeResults(state, data.sat_id, data.results);
       if (data.complete && next.open && data.sat_id === next.satId && !next.complete) {
-        return { ...next, complete: true, closeAt: now + FADE_MS };
+        return { ...next, complete: true, closeAt: next.held ? null : now + HOLD_MS };
       }
       return next;
     }

@@ -33,7 +33,7 @@ test('a tier 2 ticket asks for the operator; tier 1 keeps its tier', () => {
 });
 
 test('operator wording replaces the demo wording in the panels', () => {
-  const text = ['./Panels.jsx', './FlightOverlay.jsx', './SocChart.jsx'].map(source).join('\n');
+  const text = ['./Panels.jsx', './IncidentPicker.jsx', './FlightOverlay.jsx', './SocChart.jsx'].map(source).join('\n');
   for (const label of ['START INCIDENT', 'STARTING…', 'SHOW WHAT HAPPENED', 'SHOWING…', '>ALERTS<', 'NEXT PASS ',
     'TIME LEFT ', "'WHAT HAPPENED'", 'Eclipse complete. Show what happened to the battery.', 'AI ASSESSMENT',
     'ORIGINAL INCIDENT', '— actual battery', 'p5–p95 verifier band']) {

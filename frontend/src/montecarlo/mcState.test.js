@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  assignHypotheses, createMcState, currentResult, DWELL_MS, FADE_MS, gridModel, loadEnabled, reduceMc,
+  assignHypotheses, createMcState, currentResult, DWELL_MS, FADE_MS, gridModel, HOLD_MS, loadEnabled, reduceMc,
   sampleOutcomes, saveEnabled, socCue, SOC_LINE, spotlightModel, spotlightTile, sunlit, TILE_COUNT,
 } from './mcState.js';
 
@@ -89,15 +89,15 @@ test('the chip turns the overlay off and is remembered per viewer', () => {
   assert.equal(loadEnabled({ getItem() { throw new Error('blocked'); } }), true);
 });
 
-test('overlay closes 1.5 s after the matrix is complete, at once when the phase leaves agent/approval', () => {
+test('overlay stays HOLD_MS after the matrix is complete, closes at once when the phase leaves agent/approval', () => {
   let s = send(agentState(), call('simulate', { plan_id: 'P-1' }), 0);
   s = send(s, msg('matrix', { sat_id: 'SAT-12', results: [result('P-1', { H0: stats(1) })], complete: false }), 500);
   assert.equal(currentResult(s).plan_id, 'P-1');
   s = send(s, msg('matrix', { sat_id: 'SAT-12', results: [result('P-1', { H0: stats(1) })], complete: true }), 2000);
-  assert.equal(s.closeAt, 2000 + FADE_MS);
-  s = reduceMc(s, { type: 'tick', now: 2000 + FADE_MS - 1 });
+  assert.equal(s.closeAt, 2000 + HOLD_MS);
+  s = reduceMc(s, { type: 'tick', now: 2000 + HOLD_MS - 1 });
   assert.equal(s.open, true);
-  s = reduceMc(s, { type: 'tick', now: 2000 + FADE_MS });
+  s = reduceMc(s, { type: 'tick', now: 2000 + HOLD_MS });
   assert.equal(s.open, false);
 
   let t = send(agentState(), call('simulate', { plan_id: 'P-1' }), 0);
@@ -129,10 +129,10 @@ test('plans simulated in one turn each get their own run, in order', () => {
   assert.equal(s.planId, 'P-2');
   assert.equal(s.run, run + 1, 'tiles reset for the next plan');
   s = send(s, msg('matrix', { sat_id: 'SAT-12', results: [], complete: true }), DWELL_MS + 10);
-  s = reduceMc(s, { type: 'tick', now: DWELL_MS + 10 + FADE_MS });
+  s = reduceMc(s, { type: 'tick', now: DWELL_MS + 10 + HOLD_MS });
   assert.equal(s.open, true, 'P-3 has not been shown yet');
   assert.equal(s.planId, 'P-3');
-  s = reduceMc(s, { type: 'tick', now: 3 * DWELL_MS + FADE_MS });
+  s = reduceMc(s, { type: 'tick', now: 3 * DWELL_MS + HOLD_MS });
   assert.equal(s.open, false);
 });
 
@@ -176,6 +176,32 @@ test('grid model, verdict and spotlight use backend numbers only', () => {
   assert.equal(spotlightModel(s, m, 99), null);
   assert.equal(reduceMc(s, { type: 'expand', tile: 3 }).expanded, 3);
   assert.equal(reduceMc(s, { type: 'expand', tile: 40 }).expanded, null);
+});
+
+test('a satellite waiting for the human holds the grid until its execution, then it fades', () => {
+  let s = send(agentState(), call('simulate', { plan_id: 'P-1' }), 0);
+  s = send(s, msg('matrix', { sat_id: 'SAT-12', results: [result('P-1', { H0: stats(1) })], complete: true }), 1000);
+  s = send(s, msg('approval_request', { sat_id: 'SAT-12', plan_id: 'P-1', approval_id: 'AP-1', tier: 2 }), 1100);
+  assert.equal(s.held, true);
+  assert.equal(s.closeAt, null);
+  s = reduceMc(s, { type: 'tick', now: 1100 + 10 * HOLD_MS });
+  assert.equal(s.open, true, 'held while the judge thinks');
+  s = reduceMc(s, { type: 'collapse', now: 1100 + 10 * HOLD_MS });
+  assert.equal(s.closeAt, null, 'Esc does not start the fade while held');
+  s = send(s, msg('execution', { sat_id: 'SAT-07', plan_id: 'P-1', status: 'executed', t: 0 }), 70000);
+  assert.equal(s.closeAt, null, 'another satellite executing changes nothing');
+  s = send(s, msg('execution', { sat_id: 'SAT-12', plan_id: 'P-1', status: 'executed', t: 0 }), 80000);
+  assert.equal(s.held, false);
+  assert.equal(s.closeAt, 80000 + FADE_MS);
+  assert.equal(reduceMc(s, { type: 'tick', now: 80000 + FADE_MS }).open, false);
+
+  // the ticket arrives before the matrix completes: still held, the completion does not schedule a close
+  let t = send(agentState(), call('simulate', { plan_id: 'P-1' }), 0);
+  t = send(t, msg('approval_request', { sat_id: 'SAT-12', plan_id: 'P-1' }), 500);
+  t = send(t, msg('matrix', { sat_id: 'SAT-12', results: [result('P-1', { H0: stats(1) })], complete: true }), 900);
+  assert.equal(t.complete, true);
+  assert.equal(t.closeAt, null);
+  assert.equal(send(t, msg('demo_state', { state: 'fastforward', speed: 600 })).open, false, 'phase change still closes');
 });
 
 test('an expanded sample holds the overlay; Esc (collapse) restarts the 1.5 s fade', () => {

@@ -115,3 +115,19 @@ button { font: inherit; }
   .provenance-legend, .attract-view .provenance-legend { width: calc(100% - 24px); margin-top: 60vh; min-height: 52px; }.panels-visible .provenance-legend { margin-top: 12px; }.attract-view .fleet-ticker { margin-top: 12px; flex-wrap: wrap; min-height: 56px; }
   .poster-line { top: 23%; left: 24px; font-size: 32px; }
 }
+
+/* T42 incident picker (attract only) */
+.director-slot:has(.incident-picker) { height: auto; min-height: var(--strip-h); }
+.incident-picker { display: flex; flex-direction: column; gap: var(--sp-2); }
+.incident-row { display: flex; flex-direction: column; gap: var(--sp-1); }
+.incident-label { color: var(--c-ink-3); font: 600 var(--fs-label) var(--font-cond); letter-spacing: .04em; display: flex; justify-content: space-between; align-items: baseline; }
+.incident-label small { font-weight: 500; letter-spacing: 0; text-transform: none; }
+.sat-chips { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+.sat-chip { border: 1px solid var(--c-line-strong); border-radius: var(--r-1); padding: 3px 0; background: transparent; color: var(--c-ink-2); font: 500 var(--fs-label) var(--font-cond); letter-spacing: .02em; cursor: pointer; }
+.sat-chip[aria-pressed="true"] { color: var(--c-alert-ink); background: var(--c-alert); border-color: var(--c-alert); }
+.sat-chip:disabled { opacity: .45; cursor: default; }
+.incident-select { width: 100%; padding: 6px 8px; border: 1px solid var(--c-line-strong); border-radius: var(--r-1); background: var(--c-raise); color: var(--c-ink); font: 500 var(--fs-body) var(--font-cond); }
+.incident-select:disabled { color: var(--c-ink-3); }
+.incident-notice { min-height: 18px; color: var(--c-ink-3); font: 500 var(--fs-label) var(--font-cond); text-align: right; }
+.incident-link { background: none; border: 0; padding: 0; color: var(--c-ink-2); font: inherit; text-decoration: underline; cursor: pointer; }
+.incident-link:disabled { cursor: default; opacity: .6; }
