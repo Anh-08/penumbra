@@ -43,6 +43,10 @@ export function reduceIncident(state, action) {
     }
     case 'set_fault':
       return state.faults.some((f) => f.id === action.fault) ? { ...state, fault: action.fault } : state;
+    case 'set_selection': {  // from a voice command: known ids only, at most maxIncidents, never empty
+      const sats = (Array.isArray(action.sats) ? action.sats : []).filter((id, i, a) => state.sats.includes(id) && a.indexOf(id) === i);
+      return sats.length ? { ...state, selected: sats.slice(0, state.maxIncidents) } : state;
+    }
     default:
       return state;
   }

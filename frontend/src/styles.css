@@ -122,3 +122,17 @@ button { font: inherit; }
 .incident-notice { min-height: 18px; color: var(--c-ink-3); font: 500 var(--fs-label) var(--font-cond); text-align: right; }
 .incident-link { background: none; border: 0; padding: 0; color: var(--c-ink-2); font: inherit; text-decoration: underline; cursor: pointer; }
 .incident-link:disabled { cursor: default; opacity: .6; }
+/* T43 push-to-talk */
+.push-to-talk { display: grid; grid-template-columns: auto 1fr; gap: var(--sp-2); align-items: center; }
+.mic-button { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border: 1px solid var(--c-line-strong); border-radius: var(--r-1); background: var(--c-raise); color: var(--c-ink-2); font: 600 var(--fs-label) var(--font-cond); letter-spacing: .04em; cursor: pointer; user-select: none; touch-action: none; white-space: nowrap; }
+.mic-button:disabled { opacity: .45; cursor: default; }
+.mic-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c-ink-3); }
+.push-to-talk.listening .mic-button { border-color: var(--c-refused); color: var(--c-refused); }
+.push-to-talk.listening .mic-dot { background: var(--c-refused); animation: mic-pulse 1s ease-in-out infinite; }
+.push-to-talk.thinking .mic-dot { background: var(--c-alert); }
+.push-to-talk.done .mic-dot { background: var(--c-verified); }
+.voice-line { min-height: 16px; color: var(--c-ink-3); font: 500 var(--fs-label) var(--font-cond); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.push-to-talk.done .voice-line { color: var(--c-ink-2); }
+.push-to-talk.error .voice-line { color: var(--c-refused); }
+@keyframes mic-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { .push-to-talk.listening .mic-dot { animation: none; } }

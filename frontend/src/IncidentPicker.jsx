@@ -1,6 +1,7 @@
 // Operator-triggered incident (T42): satellites + fault, then START INCIDENT. Lives in the Flight Director slot
 // while the demo is in attract. Without the custom path the button runs the recorded incident.
 import { canStart, noticeFor } from './incidentState.js';
+import { PushToTalk } from './PushToTalk.jsx';
 
 export function IncidentPicker({ state, dispatch, pending, onStart, onStartRecorded, runLive, onToggleRunLive }) {
   const custom = canStart(state);
@@ -27,6 +28,7 @@ export function IncidentPicker({ state, dispatch, pending, onStart, onStartRecor
         {state.faults.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
       </select>
     </div>
+    {state.available && <PushToTalk incident={state} dispatchIncident={dispatch} disabled={pending} />}
     <button className="director-action storm" disabled={pending}
       onClick={custom ? onStart : onStartRecorded}>
       {pending ? 'STARTING…' : 'START INCIDENT'}
