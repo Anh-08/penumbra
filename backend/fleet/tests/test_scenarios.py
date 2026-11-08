@@ -91,3 +91,12 @@ def test_plan_commanding_a_suspect_load_is_tier2():
     assert flight_rules.tier(duty_only, sim(duty_only), stuck) == (1, "FR-2")   # does not touch the suspect
     payload_stuck = flight_rules.RuleContext(now=t0 + 30, commanded_duty=1.0, suspect_loads=frozenset({"PAYLOAD"}))
     assert flight_rules.tier(duty_only, sim(duty_only), payload_stuck) == (2, None)
+
+
+def test_run_storm_streams_events_and_exposes_the_backend(tmp_path):
+    seen, backends = [], []
+    out = demo.run_storm(select_model(live=False), run_id="storm-stream", runs_dir=tmp_path,
+                         on_event=seen.append, on_backend=backends.append)
+    lines = (tmp_path / "storm-stream.jsonl").read_text().splitlines()
+    assert len(seen) == len(lines) and {e.kind for e in seen} >= {"alert", "tool_call", "execution"}
+    assert backends == [out["backend"]]
