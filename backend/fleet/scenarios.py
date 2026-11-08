@@ -170,7 +170,7 @@ def beta_season(seed: int = 0, sat_ids: tuple[str, ...] = SAT_IDS, hours: float 
 def conjunction(seed: int = 0, sat_ids: tuple[str, ...] = SAT_IDS, hours: float = 24.0) -> Scenario:
     """T31: SIMULATED debris DEB-01 passes SAT-17 0.3 km away at T0 + 5.2 h (data/debris/debris.json).
 
-    SAT-17 (40 % of each orbit in shadow, the tightest budget) flies its payload at full duty from SOC 0.71 and
+    SAT-17 (40 % of each orbit in shadow, the tightest budget) flies its payload at full duty from SOC 0.74 and
     recovers only ~5 % SOC per orbit. Three burn windows: W1 (cheap delta-v) inside its second eclipse while the
     battery is still low, W2 and W3 (larger delta-v) in sunlight, W3 with the battery charged. A burn draws the
     window's power for slew + burn with the payload off, so W1 risks the SOC floor and W3 does not: the power-coupled
@@ -178,7 +178,7 @@ def conjunction(seed: int = 0, sat_ids: tuple[str, ...] = SAT_IDS, hours: float 
     """
     focus = "SAT-17"
     tasking = {focus: [Command(t_exec=T0, name="SET_PAYLOAD_DUTY", args={"duty": 1.0})]}
-    return _world("conjunction", seed, sat_ids, hours, [], soc0={focus: 0.71}, tasking=tasking, focus=focus,
+    return _world("conjunction", seed, sat_ids, hours, [], soc0={focus: 0.74}, tasking=tasking, focus=focus,
                   with_conjunctions=True)
 
 

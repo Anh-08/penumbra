@@ -70,7 +70,8 @@ TRUTH: dict[str, Param] = {
     "heater_hysteresis_c": Param(1.0, "degC", "assumed: thermostat band (+/- half of this)"),
     "safe_heater_setpoint_c": Param(0.0, "degC", "assumed: survival setpoint in SAFE_MODE"),
     # ---- collision-avoidance burn (T31) ----
-    "cam_slew_s": Param(900.0, "s", "assumed: slew to burn attitude, settle, burn, slew back (the burn itself adds burn_s)"),
+    "cam_slew_s": Param(1800.0, "s", "assumed: slew to burn attitude, settle, burn, settle, slew back, attitude "
+                         "recovery, with the propulsion electronics warm (the burn itself adds burn_s)"),
     # ---- one-node battery thermal model ----
     "thermal_capacity": Param(2000.0, "J/K", "assumed: pack plus mounting plate"),
     "thermal_conductance": Param(0.4, "W/K", "assumed: pack to structure"),
