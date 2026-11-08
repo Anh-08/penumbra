@@ -1,4 +1,4 @@
-"""Fleet-backed API adapter. The factory and approval methods are wired after owner handoff."""
+"""Fleet-backed API adapter for live positions, verification, approval, and reveal."""
 from __future__ import annotations
 
 import math
@@ -88,6 +88,14 @@ class RealProvider:
     def operator_ticket(self, plan_id: str) -> Any:
         with self._lock:
             return self.dispatcher.operator_ticket(plan_id)
+
+    def matrix(self, sat_id: str, complete: bool = True) -> Any:
+        with self._lock:
+            return self.backend.matrix(sat_id, complete)
+
+    def trajectory(self, plan_id: str, hypothesis: str) -> Any:
+        with self._lock:
+            return self.backend.verifier.trajectory(plan_id, hypothesis)
 
     def approve(self, approval_id: str, plan_hash: str) -> ApprovalRefused | ExecutionMsg:
         with self._lock:
