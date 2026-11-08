@@ -4,6 +4,9 @@ agent's registry of plans, simulation results, alerts and approvals.
 Bad input never raises out of `dispatch`; the model gets `{"error": ...}` back and can try again.
 Every result is plain JSON (no NaN, no pydantic objects), ready for the model and the flight recorder.
 `approve()` is the check behind POST /api/approve; `execute()` runs an approved plan afterwards.
+`operator_ticket()` gives the Flight Director's button an approval_id for any simulated plan, including a red one,
+so pressing it shows the refusal with the failing hypotheses (physics has veto). The agent's own
+`request_approval` tool still refuses failed plans.
 
 Diagnostic tests (T20): `propose_diagnostic_test` time-tags untagged steps one DIAGNOSTIC_STEP_S apart inside
 the pass. A Tier 1 plan (pre-approved flight rule) executes as soon as `request_approval` is called. After a
@@ -156,6 +159,8 @@ class Dispatcher:
             slot = self.assignments.get(plan.plan_id)
             if slot is None and plan.plan_id in self._schedule_requests:
                 raise SafetyError("uplink_closed", f"{plan.plan_id} has no uplink slot (it lost it to another plan)")
+            if slot is None:
+                raise SafetyError("not_scheduled", f"{plan.plan_id} has no booked uplink; schedule it first")
             if slot is not None and self.backend.now() >= slot.end_t:
                 raise SafetyError("uplink_closed", f"the scheduled uplink for {plan.plan_id} has passed")
         except SafetyError as exc:
@@ -174,6 +179,29 @@ class Dispatcher:
             plan_hash=current,
         )
         return plan
+
+    def operator_ticket(self, plan_id: str) -> ApprovalRequestMsg:
+        """Approval ticket for the Flight Director's button on any simulated plan (green or red).
+
+        Returns the plan's open ticket if it has one for its latest simulation, else a new Tier 2 ticket (a human
+        decides; the tier policy is not consulted). Nothing is executed here: `approve()` still decides, and a plan
+        that failed verification is refused there with its failing hypotheses. Raises SafetyError if the plan is
+        unknown or was never simulated."""
+        plan = self.plans.get(plan_id) if isinstance(plan_id, str) else None
+        if plan is None:
+            raise SafetyError("unknown_plan", f"no plan {plan_id!r}")
+        sim = self.sims.get(plan.plan_id)
+        if sim is None:
+            raise SafetyError("not_verified", f"{plan.plan_id} has no simulation result")
+        for ticket in reversed(list(self.approvals.values())):
+            if (ticket.plan_id == plan.plan_id and ticket.sim_id == sim.sim_id
+                    and ticket.approval_id not in self._decided):
+                return ticket
+        approval_id = f"AP-{len(self.approvals) + 1}"
+        ticket = ApprovalRequestMsg(approval_id=approval_id, plan_id=plan.plan_id, plan_hash=safety.plan_hash(plan),
+                                    sat_id=plan.sat_id, tier=2, sim_id=sim.sim_id)
+        self.approvals[approval_id] = ticket
+        return ticket
 
     def execute(self, approval_id: str, recorder: Recorder | None = None) -> dict[str, Any]:
         """Uplink and run a plan the Flight Director approved through `approve()`. Records an `execution` event
