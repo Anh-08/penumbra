@@ -130,9 +130,9 @@ class MockProvider:
         }
 
 
-def select_provider() -> MockProvider:
-    """The only import switch. Real adapters are loaded only when explicitly selected."""
-    mode = os.getenv("PENUMBRA_API_PROVIDER", "mock").lower()
+def select_provider() -> MockProvider | Any:
+    """FleetBackend is the production feed; the mock remains an explicit test option."""
+    mode = os.getenv("PENUMBRA_API_PROVIDER", "real").lower()
     if mode == "mock":
         return MockProvider()
     if mode == "real":

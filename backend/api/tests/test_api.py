@@ -9,6 +9,7 @@ from backend.api.app import create_app
 from backend.api.clock import SimClock
 from backend.api.messages import WS_SCHEMAS, validate_message
 from backend.api.providers import MockProvider, select_provider
+from backend.api.real_provider import RealProvider
 
 
 def client():
@@ -139,8 +140,10 @@ def test_websocket_streams_fleet_state_at_one_to_two_hertz():
             assert second['data']['t'] > first['data']['t']
 
 
-def test_provider_import_switch_defaults_to_mock(monkeypatch):
+def test_provider_import_switch_defaults_to_real_and_keeps_explicit_mock(monkeypatch):
     monkeypatch.delenv('PENUMBRA_API_PROVIDER', raising=False)
+    assert isinstance(select_provider(), RealProvider)
+    monkeypatch.setenv('PENUMBRA_API_PROVIDER', 'mock')
     assert isinstance(select_provider(), MockProvider)
     monkeypatch.setenv('PENUMBRA_API_PROVIDER', 'unknown')
     try:

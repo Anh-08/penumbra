@@ -93,7 +93,7 @@ def create_app(provider: Any | None = None) -> FastAPI:
                 now = time.monotonic()
                 if now >= next_fleet:
                     if scenario_ready():
-                        state = source.fleet_state(clock.now(), clock.speed)
+                        state = await asyncio.to_thread(source.fleet_state, clock.now(), clock.speed)
                         if state is not None:
                             await websocket.send_json(validate_message("fleet_state", state))
                     next_fleet = now + FLEET_INTERVAL_S
@@ -125,7 +125,7 @@ def create_app(provider: Any | None = None) -> FastAPI:
     async def fault_storm() -> StormResponse:
         if not scenario_ready():
             raise HTTPException(status_code=503, detail="scenario is not ready")
-        alerts = source.storm_alerts(clock.now())
+        alerts = await asyncio.to_thread(source.storm_alerts, clock.now())
         for alert in alerts:
             publish("alert", alert)
             if alert.severity in ("warning", "critical"):
@@ -142,7 +142,7 @@ def create_app(provider: Any | None = None) -> FastAPI:
 
     @app.post("/api/approve", response_model=ApprovalRefused | ExecutionMsg)
     async def approve(request: ApproveRequest) -> ApprovalRefused | ExecutionMsg:
-        result = source.approve(request.approval_id, request.plan_hash)
+        result = await asyncio.to_thread(source.approve, request.approval_id, request.plan_hash)
         if isinstance(result, ApprovalRefused):
             publish("approval_refused", ApprovalRefusedMsg(
                 approval_id=request.approval_id,
@@ -171,7 +171,7 @@ def create_app(provider: Any | None = None) -> FastAPI:
 
     @app.post("/api/reveal", response_model=RevealMsg)
     async def reveal(request: RevealRequest) -> RevealMsg:
-        result = source.reveal(request.sat_id)
+        result = await asyncio.to_thread(source.reveal, request.sat_id)
         if result is None:
             raise HTTPException(status_code=409, detail="truth can be revealed only after execution")
         message = RevealMsg.model_validate(result)
