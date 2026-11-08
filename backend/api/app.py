@@ -96,6 +96,9 @@ def create_app(provider: Any | None = None) -> FastAPI:
                         state = await asyncio.to_thread(source.fleet_state, clock.now(), clock.speed)
                         if state is not None:
                             await websocket.send_json(validate_message("fleet_state", state))
+                        if hasattr(source, "drain_messages"):
+                            for event in source.drain_messages():
+                                publish(event["type"], event["data"])
                     next_fleet = now + FLEET_INTERVAL_S
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=max(0.0, next_fleet - time.monotonic()))
@@ -126,6 +129,11 @@ def create_app(provider: Any | None = None) -> FastAPI:
         if not scenario_ready():
             raise HTTPException(status_code=503, detail="scenario is not ready")
         alerts = await asyncio.to_thread(source.storm_alerts, clock.now())
+        if hasattr(source, "drain_messages"):
+            events = source.drain_messages()
+            for event in events:
+                publish(event["type"], event["data"])
+            return StormResponse(started=True, alert_count=sum(event["type"] == "alert" for event in events))
         for alert in alerts:
             publish("alert", alert)
             if alert.severity in ("warning", "critical"):

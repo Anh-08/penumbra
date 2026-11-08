@@ -131,6 +131,32 @@ def test_complete_matrix_emits_one_operator_ticket_per_simulated_plan():
             assert ticket['data']['plan_id'] == 'P-1'
 
 
+def test_real_detector_alert_and_callout_use_its_messages_without_duplicates():
+    class DetectorProvider(MockProvider):
+        def storm_alerts(self, t):
+            self.pending = [
+                {'type': 'alert', 'data': self.storm_alerts_sample(t)},
+                {'type': 'callout', 'data': {'text': 'SAT-07 requires attention', 'priority': 2}},
+            ]
+            return []
+
+        def storm_alerts_sample(self, t):
+            return MockProvider.storm_alerts(self, t)[0].model_dump(mode='json')
+
+        def drain_messages(self):
+            events = getattr(self, 'pending', [])
+            self.pending = []
+            return events
+
+    app = create_app(provider=DetectorProvider(t0=1_800_000_000.0))
+    with TestClient(app) as api:
+        with api.websocket_connect('/ws') as ws:
+            assert ws.receive_json()['type'] == 'fleet_state'
+            response = api.post('/api/fault-storm')
+            assert response.json()['alert_count'] == 1
+            assert [ws.receive_json()['type'], ws.receive_json()['type']] == ['alert', 'callout']
+
+
 def test_clock_runs_at_requested_speed_and_rejects_out_of_range():
     with client() as api:
         assert api.post('/api/clock', json={'speed': 1}).json()['speed'] == 1
