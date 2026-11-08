@@ -9,6 +9,7 @@ export function createFlightState() {
     approvals: {},
     refusal: null,
     execution: null,
+    approved: null,  // the last plan a human approved (execution status "executed"), not a Tier 1 auto-execution
     trajectory: null,
     telemetry: {},
     reveals: {},
@@ -26,7 +27,9 @@ export function reduceFlight(state, message) {
     if (!Object.values(state.approvals).some((ticket) => ticket.approval_id === data.approval_id)) return state;
     return { ...state, refusal: data };
   }
-  if (message.type === 'execution') return { ...state, execution: data, refusal: null };
+  if (message.type === 'execution') {
+    return { ...state, execution: data, approved: data.status === 'executed' ? data : state.approved, refusal: null };
+  }
   if (message.type === 'trajectory') return { ...state, trajectory: data };
   if (message.type === 'reveal') {
     return { ...state, reveals: { ...state.reveals, [data.sat_id]: data } };
@@ -41,6 +44,21 @@ export function reduceFlight(state, message) {
     return { ...state, telemetry: { ...state.telemetry, [result.sat_id]: points } };
   }
   return state;
+}
+
+// What the flight overlay, the reveal call and the Flight Director follow. In fastforward and reveal that is the
+// satellite and plan the human approved (the director fast-forwards that one), whatever satellite the judge
+// clicked afterwards (e.g. a red SAT-19 column for the physics veto). Elsewhere it is the selected satellite.
+export function flightFocus({ phase, selected, selectedPlanId, flight, matrixBySat }) {
+  const approved = flight?.approved;
+  const follow = (phase === 'fastforward' || phase === 'reveal') && approved;
+  const satId = follow ? approved.sat_id : selected;
+  const matrix = matrixBySat?.[satId];
+  const planId = follow ? approved.plan_id : selectedPlanId;
+  const result = matrix?.results.find((r) => r.plan_id === planId) ?? (follow ? null : matrix?.results[0]) ?? null;
+  const approval = result ? flight?.approvals?.[ticketKey(satId, result.plan_id)] ?? null : null;
+  return { satId, following: Boolean(follow), result, approval,
+    chartResult: follow ? result : (matrix?.complete ? matrix.results[0] : null) };
 }
 
 export function approvalPayload(approval, result) {

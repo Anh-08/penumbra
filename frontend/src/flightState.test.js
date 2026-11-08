@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  advanceEclipse, approvalPayload, createFlightState, hashPrefix, observedPoints, reduceFlight, ticketKey,
+  advanceEclipse, approvalPayload, createFlightState, flightFocus, hashPrefix, observedPoints, reduceFlight,
+  ticketKey,
 } from './flightState.js';
 
 test('approval uses the exact backend approval id and selected SimResult hash, including a failed plan', () => {
@@ -90,4 +91,37 @@ test('tickets of two satellites with the same plan id do not overwrite each othe
     approval_id: 'AP-1', plan_id: 'P-1', plan_hash: 'sat19', sat_id: 'SAT-19', tier: 2, sim_id: 'S-2' } });
   assert.equal(state.approvals[ticketKey('SAT-07', 'P-1')].plan_hash, 'sat07');
   assert.equal(state.approvals[ticketKey('SAT-19', 'P-1')].plan_hash, 'sat19');
+});
+
+test('after approving SAT-07 and clicking a red SAT-19 column, fastforward and reveal still follow SAT-07', () => {
+  const ticket = (sat, plan, hash) => ({ type: 'approval_request', data: {
+    approval_id: 'AP-1', plan_id: plan, plan_hash: hash, sat_id: sat, tier: 2, sim_id: 'S-1' } });
+  const result = (plan, hash, passes) => ({ plan_id: plan, plan_hash: hash, passes_all: passes,
+    plausible: ['H2'], per_hyp: { H2: { min_soc_p5: passes ? 0.3 : 0.1 } } });
+  let flight = createFlightState();
+  for (const message of [
+    { type: 'execution', data: { plan_id: 'P-1', sat_id: 'SAT-12', status: 'auto_executed', t: 1, flight_rule: 'FR-2' } },
+    ticket('SAT-07', 'P-1', 'h07'),
+    { type: 'execution', data: { plan_id: 'P-1', sat_id: 'SAT-07', status: 'executed', t: 2 } },
+    ticket('SAT-19', 'P-1', 'h19a'), ticket('SAT-19', 'P-2', 'h19b'),
+    { type: 'approval_refused', data: { approval_id: 'AP-1', reason_key: 'failed_verification', failing_hypotheses: ['H3'] } },
+  ]) flight = reduceFlight(flight, message);
+  assert.equal(flight.approved.sat_id, 'SAT-07');
+  const matrixBySat = {
+    'SAT-07': { complete: true, results: [result('P-1', 'h07', true)] },
+    'SAT-19': { complete: true, results: [result('P-1', 'h19a', false), result('P-2', 'h19b', false)] },
+  };
+  for (const phase of ['fastforward', 'reveal']) {
+    const focus = flightFocus({ phase, selected: 'SAT-19', selectedPlanId: 'P-2', flight, matrixBySat });
+    assert.equal(focus.following, true);
+    assert.equal(focus.satId, 'SAT-07');  // overlay header, telemetry, reveal and the /api/reveal sat_id
+    assert.equal(focus.result.plan_hash, 'h07');
+    assert.equal(focus.chartResult.plan_hash, 'h07');
+    assert.equal(focus.approval.sat_id, 'SAT-07');
+  }
+  const matrixView = flightFocus({ phase: 'agent', selected: 'SAT-19', selectedPlanId: 'P-2', flight, matrixBySat });
+  assert.equal(matrixView.following, false);
+  assert.equal(matrixView.satId, 'SAT-19');  // triage and matrix panels still follow the selection
+  assert.equal(matrixView.result.plan_hash, 'h19b');
+  assert.equal(matrixView.approval.sat_id, 'SAT-19');
 });
