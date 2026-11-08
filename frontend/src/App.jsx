@@ -77,6 +77,7 @@ function App() {
   const [localPreview, setLocalPreview] = useState(true);
   const [sceneError, setSceneError] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
+  const [revealT, setRevealT] = useState(null);
   const [runLive, setRunLive] = useState(false);
   const [incident, dispatchIncident] = useReducer(reduceIncident, undefined, createIncidentState);
   const [skyVisible, setSkyVisible] = useState(() => {
@@ -211,6 +212,10 @@ function App() {
       return next;
     });
   }
+
+  useEffect(() => {
+    setRevealT(panel.phase === 'reveal' ? fleet.t : null);
+  }, [panel.phase]);
 
   useEffect(() => {
     const execution = flight.execution;
@@ -353,7 +358,8 @@ function App() {
     {flightOpen && <FlightOverlay phase={panel.phase} satId={focus.satId}
       trajectory={flight.trajectory} telemetry={flight.telemetry[focus.satId]}
       reveal={flight.reveals[focus.satId]} socMin={SOC_MIN}
-      chartPlanId={chartResult?.plan_id} chartHypothesis={worstPlausibleHypothesis(chartResult)} />}
+      chartPlanId={chartResult?.plan_id} chartHypothesis={worstPlausibleHypothesis(chartResult)}
+      executionT={flight.approved?.t} nowT={fleet.t} revealT={revealT} />}
 
     {anatomy.enabled && anatomyCardReady && !showPanels && <Suspense fallback={null}>
       <AnatomyCard onOpen={() => dispatchAnatomy({ type: 'open' })} />

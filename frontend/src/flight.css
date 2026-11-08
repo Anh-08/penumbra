@@ -5,6 +5,9 @@
 .chart-band { fill: var(--c-band); }.chart-median { fill: none; stroke: var(--c-ink-2); stroke-width: 1.5; }
 .chart-min { stroke: var(--c-refused); stroke-width: 2; stroke-dasharray: 6 5; }.chart-min-label { fill: var(--c-refused); font: 600 13px var(--font-cond); }
 .chart-observation { fill: var(--c-truth); }.chart-truth { fill: none; stroke: var(--c-truth); stroke-width: 2; stroke-dasharray: 1600; animation: truth-draw var(--dur-draw) linear both; }
+.soc-chart svg.chart-overview { flex: 0 0 14px; height: 14px; min-height: 14px; overflow: hidden; background: var(--c-raise); }
+.chart-overview-median { fill: none; stroke: var(--c-ink-3); stroke-width: 1; }
+.chart-window-frame { fill: none; stroke: var(--c-ink); stroke-width: 1.5; }
 @keyframes truth-draw { from { stroke-dashoffset: 1600; } to { stroke-dashoffset: 0; } }
 .chart-key { flex: 0 0 18px; display: flex; gap: var(--sp-4); color: var(--c-ink-3); font: 500 var(--fs-label) var(--font-cond); }
 .chart-empty { display: grid; place-items: center; height: 100%; color: var(--c-ink-3); font: 500 var(--fs-label) var(--font-cond); }

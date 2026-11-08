@@ -1,4 +1,5 @@
 import { observedPoints } from './flightState.js';
+import { clipSeries } from './chartWindow.js';
 
 const LEFT = 48;
 const RIGHT = 960;
@@ -13,29 +14,39 @@ function yFor(soc) {
   return BOTTOM - Math.max(0, Math.min(1, soc)) * (BOTTOM - TOP);
 }
 
-function pathFor(t, values, first, last) {
-  if (!Array.isArray(t) || !Array.isArray(values) || t.length !== values.length) return '';
-  return t.map((time, index) => `${index ? 'L' : 'M'}${xFor(time, first, last).toFixed(1)},${yFor(values[index]).toFixed(1)}`).join(' ');
+function pathFor(points, first, last, y = yFor) {
+  return points.map(({ t, value }, index) =>
+    `${index ? 'L' : 'M'}${xFor(t, first, last).toFixed(1)},${y(value).toFixed(1)}`).join(' ');
 }
 
-function bandFor(trajectory, first, last) {
-  const upper = pathFor(trajectory.t, trajectory.soc_p95, first, last);
-  if (!upper || trajectory.soc_p5?.length !== trajectory.t.length) return '';
-  const lower = [...trajectory.t].reverse().map((t, index) =>
-    `L${xFor(t, first, last).toFixed(1)},${yFor(trajectory.soc_p5[trajectory.t.length - index - 1]).toFixed(1)}`).join(' ');
+function bandFor(upperPoints, lowerPoints, first, last) {
+  const upper = pathFor(upperPoints, first, last);
+  if (!upper || !lowerPoints.length) return '';
+  const lower = [...lowerPoints].reverse().map(({ t, value }) =>
+    `L${xFor(t, first, last).toFixed(1)},${yFor(value).toFixed(1)}`).join(' ');
   return `${upper} ${lower} Z`;
+}
+
+function overviewY(soc) {
+  return 15 - Math.max(0, Math.min(1, soc)) * 12;
 }
 
 function utc(t) {
   return Number.isFinite(t) ? new Date(t * 1000).toISOString().slice(11, 16) : '—';
 }
 
-export function SocChart({ trajectory, telemetry, truthSoc, socMin, planId, hypothesis }) {
+export function SocChart({ trajectory, telemetry, truthSoc, socMin, planId, hypothesis, window }) {
   if (!trajectory?.t?.length) return <div className="chart-empty">AWAITING VERIFIER TRAJECTORY</div>;
-  const first = trajectory.t[0];
-  const last = trajectory.t.at(-1);
-  const observed = observedPoints(trajectory, telemetry);
-  const truthPath = truthSoc && pathFor(truthSoc.t, truthSoc.soc, first, last);
+  const horizonFirst = trajectory.t[0];
+  const horizonLast = trajectory.t.at(-1);
+  const { first, last } = window ?? { first: horizonFirst, last: horizonLast };
+  const p5 = clipSeries(trajectory.t, trajectory.soc_p5, first, last);
+  const p50 = clipSeries(trajectory.t, trajectory.soc_p50, first, last);
+  const p95 = clipSeries(trajectory.t, trajectory.soc_p95, first, last);
+  const observed = observedPoints(trajectory, telemetry).filter((point) => point.t >= first && point.t <= last);
+  const truth = truthSoc ? clipSeries(truthSoc.t, truthSoc.soc, first, last) : [];
+  const truthPath = pathFor(truth, first, last);
+  const horizonMedian = clipSeries(trajectory.t, trajectory.soc_p50, horizonFirst, horizonLast);
   return <section className="soc-chart" aria-label="State of charge trajectory">
     <div className="chart-heading"><strong>STATE OF CHARGE · {planId ?? '—'} · {hypothesis ?? '—'} WORST PLAUSIBLE</strong></div>
     <svg viewBox="0 0 1000 190" preserveAspectRatio="none" role="img" aria-label="Verifier SOC band, downlinked points, and optional revealed truth">
@@ -44,8 +55,8 @@ export function SocChart({ trajectory, telemetry, truthSoc, socMin, planId, hypo
       <text className="chart-tick" x="18" y={BOTTOM}>0%</text>
       <text className="chart-tick" x={LEFT} y="186">{utc(first)}Z</text>
       <text className="chart-tick" x={RIGHT} y="186" textAnchor="end">{utc(last)}Z</text>
-      <path className="chart-band" d={bandFor(trajectory, first, last)} />
-      <path className="chart-median" d={pathFor(trajectory.t, trajectory.soc_p50, first, last)} />
+      <path className="chart-band" d={bandFor(p95, p5, first, last)} />
+      <path className="chart-median" d={pathFor(p50, first, last)} />
       {Number.isFinite(socMin) && <>
         <line className="chart-min" x1={LEFT} x2={RIGHT} y1={yFor(socMin)} y2={yFor(socMin)} />
         <text className="chart-min-label" x={RIGHT - 3} y={yFor(socMin) - 5} textAnchor="end">SOC_MIN</text>
@@ -54,6 +65,12 @@ export function SocChart({ trajectory, telemetry, truthSoc, socMin, planId, hypo
         cx={xFor(point.t, first, last)} cy={yFor(point.soc)} r="3" />)}
       {truthPath && <path className="chart-truth" d={truthPath} />}
     </svg>
+    {window && <svg className="chart-overview" viewBox="0 0 1000 18" preserveAspectRatio="none"
+      role="img" aria-label="Full trajectory with highlighted flight window">
+      <path className="chart-overview-median" d={pathFor(horizonMedian, horizonFirst, horizonLast, overviewY)} />
+      <rect className="chart-window-frame" x={xFor(first, horizonFirst, horizonLast)} y="1"
+        width={Math.max(2, xFor(last, horizonFirst, horizonLast) - xFor(first, horizonFirst, horizonLast))} height="16" />
+    </svg>}
     <div className="chart-key"><span>p5–p95 verifier band</span>{truthPath && <span>— actual battery</span>}</div>
   </section>;
 }
