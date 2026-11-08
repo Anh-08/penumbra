@@ -15,6 +15,7 @@ def d():
     d.dispatch("get_fleet_status", {})  # registers AL-1
     pid = d.dispatch("propose_plan", {"sat_id": MOCK_SAT, "commands": SHED}).result["plan_id"]  # P-1
     d.dispatch("simulate", {"plan_id": pid})  # S-1
+    d.dispatch("schedule_uplink", {"plan_id": pid})
     d.dispatch("request_approval", {"plan_id": pid})  # AP-1
     return d
 

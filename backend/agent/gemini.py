@@ -104,6 +104,7 @@ class GeminiModel:
         self._sleep = sleeper
         self._jitter = jitter
         self._raw: dict[tuple[str, ...], Any] = {}  # tool-call ids of a turn -> the Content Gemini returned
+        self._declared: list[Any] | None = None  # last tool declarations (kept for a no-tools final turn)
         self.last_call: CallStats | None = None
 
     @classmethod
@@ -116,9 +117,16 @@ class GeminiModel:
     ) -> ModelResponse:
         from google.genai import types
 
+        if tools:
+            self._declared = [types.Tool(function_declarations=[_declaration(t) for t in tools])]
+        # No tools offered (the loop's final turn): keep the declarations, since the history holds function calls,
+        # but forbid calling them.
+        no_calls = not tools and self._declared is not None
         config = types.GenerateContentConfig(
             system_instruction=system,
-            tools=[types.Tool(function_declarations=[_declaration(t) for t in tools])] if tools else None,
+            tools=self._declared if (tools or no_calls) else None,
+            tool_config=(types.ToolConfig(function_calling_config=types.FunctionCallingConfig(mode="NONE"))
+                         if no_calls else None),
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         )
         contents = self._contents(messages)

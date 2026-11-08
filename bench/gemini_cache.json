@@ -1,0 +1,16 @@
+{
+  "source": "runs/demo/live-single-stuck-load.jsonl",
+  "response": {
+    "tool_calls": [
+      {
+        "name": "propose_plan",
+        "args": {
+          "sat_id": "SAT-17",
+          "commands": [
+            {"name": "LOAD_OFF", "args": {"load": "PAYLOAD"}}
+          ]
+        }
+      }
+    ]
+  }
+}
