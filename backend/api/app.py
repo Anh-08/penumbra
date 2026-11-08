@@ -45,6 +45,10 @@ class StormResponse(BaseModel):
     alert_count: int
 
 
+class StormRequest(BaseModel):
+    live: bool = False
+
+
 class ClockResponse(BaseModel):
     t: float
     speed: float
@@ -64,10 +68,24 @@ def create_app(provider: Any | None = None) -> FastAPI:
     app.state.provider = source
     app.state.clock = clock
     app.state.scenario_task = None
+    app.state.demo_state = 'attract'
+    app.state.run_live = False
 
     def scenario_ready() -> bool:
         task = app.state.scenario_task
         return task is None or (task.done() and task.exception() is None)
+
+    def transition(state: str) -> DemoStateMsg:
+        speed = DEMO_SPEED[state]
+        clock.set_speed(speed)
+        app.state.demo_state = state
+        message = DemoStateMsg(state=state, speed=speed)
+        publish('demo_state', message)
+        return message
+
+    def enter_agent_after_alerts(events: list[dict[str, Any]]) -> None:
+        if app.state.demo_state == 'storm' and any(event['type'] == 'alert' for event in events):
+            transition('agent')
 
     def enqueue(message: dict[str, Any]) -> None:
         for listener in tuple(listeners):
@@ -132,8 +150,10 @@ def create_app(provider: Any | None = None) -> FastAPI:
                         if state is not None:
                             await websocket.send_json(validate_message("fleet_state", state))
                         if hasattr(source, "drain_messages"):
-                            for event in source.drain_messages():
+                            events = source.drain_messages()
+                            for event in events:
                                 publish(event["type"], event["data"])
+                            enter_agent_after_alerts(events)
                     next_fleet = now + FLEET_INTERVAL_S
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=max(0.0, next_fleet - time.monotonic()))
@@ -162,28 +182,39 @@ def create_app(provider: Any | None = None) -> FastAPI:
         return ScenarioResponse(name=request.name, seed=request.seed, t=clock.now(), status="ready")
 
     @app.post("/api/fault-storm", response_model=StormResponse)
-    async def fault_storm() -> StormResponse:
+    async def fault_storm(request: StormRequest | None = None) -> StormResponse:
         if not scenario_ready():
             raise HTTPException(status_code=503, detail="scenario is not ready")
+        app.state.run_live = request.live if request else False
+        if getattr(source, 'background_scenario', False):
+            app.state.scenario_task = asyncio.create_task(
+                asyncio.to_thread(source.set_scenario, 'fault-storm', 1))
+            await app.state.scenario_task
+            clock.reset(source.t0)
+            transition('storm')
+            return StormResponse(started=True, alert_count=0)
+        source.set_scenario('fault-storm', 1)
+        clock.reset(source.t0)
+        transition('storm')
         alerts = await asyncio.to_thread(source.storm_alerts, clock.now())
         if hasattr(source, "drain_messages"):
             events = source.drain_messages()
             for event in events:
                 publish(event["type"], event["data"])
+            enter_agent_after_alerts(events)
             return StormResponse(started=True, alert_count=sum(event["type"] == "alert" for event in events))
+        events = []
         for alert in alerts:
             publish("alert", alert)
+            events.append({'type': 'alert', 'data': alert})
             if alert.severity in ("warning", "critical"):
                 publish("callout", CalloutMsg(text=f"{alert.sat_id} requires attention", priority=2))
+        enter_agent_after_alerts(events)
         return StormResponse(started=True, alert_count=len(alerts))
 
     @app.post("/api/demo", response_model=DemoStateMsg)
     async def demo(request: DemoRequest) -> DemoStateMsg:
-        speed = DEMO_SPEED[request.state]
-        clock.set_speed(speed)
-        state = DemoStateMsg(state=request.state, speed=speed)
-        publish("demo_state", state)
-        return state
+        return transition(request.state)
 
     @app.post("/api/approve", response_model=ApprovalRefused | ExecutionMsg)
     async def approve(request: ApproveRequest) -> ApprovalRefused | ExecutionMsg:

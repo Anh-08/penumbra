@@ -165,7 +165,9 @@ def test_real_detector_alert_and_callout_use_its_messages_without_duplicates():
             assert ws.receive_json()['type'] == 'fleet_state'
             response = api.post('/api/fault-storm')
             assert response.json()['alert_count'] == 1
-            assert [ws.receive_json()['type'], ws.receive_json()['type']] == ['alert', 'callout']
+            assert [ws.receive_json()['type'] for _ in range(4)] == [
+                'demo_state', 'alert', 'callout', 'demo_state',
+            ]
 
 
 def test_clock_runs_at_requested_speed_and_rejects_out_of_range():
@@ -222,9 +224,23 @@ def test_fault_storm_broadcasts_contract_valid_alerts_and_callouts():
         with api.websocket_connect('/ws') as ws:
             assert ws.receive_json()['type'] == 'fleet_state'
             assert api.post('/api/fault-storm').json()['alert_count'] == 3
+            storm = ws.receive_json()
+            assert storm == {'type': 'demo_state', 'data': {'state': 'storm', 'speed': 600.0}}
             events = [ws.receive_json() for _ in range(6)]
             assert [event['type'] for event in events] == [
                 'alert', 'callout', 'alert', 'callout', 'alert', 'callout',
             ]
             for event in events:
                 validate_message(event['type'], event['data'])
+            assert ws.receive_json() == {'type': 'demo_state', 'data': {'state': 'agent', 'speed': 0.0}}
+            assert api.app.state.clock.speed == 0
+
+
+def test_demo_clock_follows_contract_states_and_freezes_during_approval():
+    with client() as api:
+        assert api.app.state.clock.speed == 120
+        for state, speed in [('storm', 600), ('agent', 0), ('approval', 0),
+                             ('fastforward', 600), ('reveal', 0)]:
+            response = api.post('/api/demo', json={'state': state})
+            assert response.json() == {'state': state, 'speed': speed}
+            assert api.app.state.clock.speed == speed
