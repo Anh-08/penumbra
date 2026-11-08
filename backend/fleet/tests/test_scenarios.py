@@ -100,3 +100,24 @@ def test_run_storm_streams_events_and_exposes_the_backend(tmp_path):
     lines = (tmp_path / "storm-stream.jsonl").read_text().splitlines()
     assert len(seen) == len(lines) and {e.kind for e in seen} >= {"alert", "tool_call", "execution"}
     assert backends == [out["backend"]]
+
+
+def test_run_storm_hands_tier2_to_the_flight_director(tmp_path):
+    from backend.fleet.backend import FleetBackend
+
+    be = FleetBackend(scenarios.build("fault-storm", seed=0))
+    got, clicks = {}, []
+
+    def flight_director(sat, dispatcher, ticket):        # the clock waits while this runs
+        clicks.append((sat, be.now()))
+        plan = dispatcher.approve(ticket.approval_id, ticket.plan_hash)
+        assert plan.plan_id == ticket.plan_id
+        dispatcher.execute(ticket.approval_id)
+
+    out = demo.run_storm(select_model(live=False), run_id="storm-fd", runs_dir=tmp_path, backend=be,
+                         on_dispatcher=lambda s, d: got.setdefault(s, d), on_approval=flight_director)
+    assert out["backend"] is be and set(got) == set(STORM) == set(out["dispatchers"])
+    o = out["outcomes"]
+    assert o["SAT-12"]["tier"] == 1 and o["SAT-12"]["executed"]          # Tier 1 still auto-executes
+    assert [s for s, _ in clicks] == ["SAT-07"] and o["SAT-07"]["executed"]
+    assert o["SAT-19"]["triage_status"] == "safe_mode_recommended"
