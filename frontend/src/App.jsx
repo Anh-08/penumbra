@@ -55,6 +55,9 @@ function App() {
   const [sceneError, setSceneError] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [runLive, setRunLive] = useState(false);
+  const [skyVisible, setSkyVisible] = useState(() => {
+    try { return window.localStorage.getItem('penumbra.sky') !== 'off'; } catch { return true; }
+  });
 
   useEffect(() => {
     const wallStart = performance.now();
@@ -135,6 +138,16 @@ function App() {
     scene.current?.setMotionActive?.(['attract', 'storm', 'fastforward'].includes(panel.phase));
   }, [panel.phase]);
 
+  useEffect(() => { scene.current?.setSkyVisible?.(skyVisible); }, [skyVisible]);
+
+  function toggleSky() {
+    setSkyVisible((visible) => {
+      const next = !visible;
+      try { window.localStorage.setItem('penumbra.sky', next ? 'on' : 'off'); } catch { /* optional preference */ }
+      return next;
+    });
+  }
+
   useEffect(() => {
     const execution = flight.execution;
     const executionApproval = execution ? flight.approvals[ticketKey(execution.sat_id, execution.plan_id)] : null;
@@ -214,6 +227,7 @@ function App() {
 
     <TopBar phase={panel.phase} mode={mode} time={fleet.t} speed={fleet.speed}
       hasVerification={matrixOpen || panel.trace.some((row) => row.tool === 'simulate')}
+      skyVisible={skyVisible} onToggleSky={toggleSky}
       muted={muted} onToggleVoice={toggleVoice} />
     {reconnecting && hasApiFleet.current && <div className="reconnect-badge" role="status">RECONNECTING · showing last state</div>}
 
