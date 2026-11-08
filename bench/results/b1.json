@@ -865,13 +865,17 @@
   "gemini_rejections": 0,
   "hours": 6.0,
   "inputs": {
-    "real": [],
+    "real": [
+      "24 satellite orbits (cached public OMM elements, renamed SAT-01..SAT-24)",
+      "Sun/Earth geometry (JPL DE421) and the illumination derived from it",
+      "ground station sites and 10 deg contact windows",
+      "battery OCV curve, R0, coulombic efficiency and fade rate inside the truth simulator (NASA PCoE fit)"
+    ],
     "recorded": [
       "Gemini proposal from runs/demo/live-single-stuck-load.jsonl"
     ],
     "simulated": [
       "seeded EPS fault scenarios",
-      "orbit/contact geometry",
       "telemetry and truth SOC"
     ]
   },
