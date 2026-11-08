@@ -3,7 +3,7 @@ import time
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from contracts import WS_MESSAGE_TYPES
+from contracts import ExecutionMsg, WS_MESSAGE_TYPES
 from backend.api.app import create_app
 from backend.api.clock import SimClock
 from backend.api.messages import WS_SCHEMAS, validate_message
@@ -50,6 +50,25 @@ def test_all_rest_routes_exist_and_validate_request_bodies():
         assert api.get('/api/bench').status_code == 200
         assert api.post('/api/reveal', json={'sat_id': 'SAT-07'}).status_code == 409
         assert api.post('/api/reveal', json={'sat_id': 'invalid'}).status_code == 422
+
+
+def test_approval_and_reveal_publish_contract_messages():
+    class ExecutingProvider(MockProvider):
+        def approve(self, approval_id, plan_hash):
+            self.executed.add('SAT-07')
+            return ExecutionMsg(plan_id='P-1', sat_id='SAT-07', status='executed', t=self.t0)
+
+    with TestClient(create_app(provider=ExecutingProvider(t0=1_800_000_000.0))) as api:
+        with api.websocket_connect('/ws') as ws:
+            assert ws.receive_json()['type'] == 'fleet_state'
+            response = api.post('/api/approve', json={'approval_id': 'AP-1', 'plan_hash': 'verified-hash'})
+            assert response.status_code == 200
+            assert response.json()['status'] == 'executed'
+            assert ws.receive_json()['type'] == 'execution'
+            revealed = api.post('/api/reveal', json={'sat_id': 'SAT-07'})
+            assert revealed.status_code == 200
+            assert revealed.json()['truth']['kind'] == 'stuck_on_load'
+            assert ws.receive_json()['type'] == 'reveal'
 
 
 def test_clock_runs_at_requested_speed_and_rejects_out_of_range():
