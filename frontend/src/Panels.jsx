@@ -3,8 +3,8 @@ import { hashPrefix } from './flightState.js';
 
 const HYPOTHESES = ['H0', 'H1', 'H2', 'H3', 'H4', 'H5'];
 
-function PanelHeading({ children, source = 'SIM' }) {
-  return <div className="panel-heading"><span>{children}</span><span className="source-tag">{source}</span></div>;
+function PanelHeading({ children }) {
+  return <div className="panel-heading"><span>{children}</span></div>;
 }
 
 function timeLabel(t) {
@@ -28,12 +28,11 @@ export function TriageQueue({ alerts, now, selected, onSelect }) {
     <PanelHeading>TRIAGE QUEUE</PanelHeading>
     <div className="triage-scroll">
       {alerts.length === 0 && <div className="panel-empty">AWAITING FLEET ALERTS</div>}
-      {alerts.map((alert, index) => <button
+      {alerts.map((alert) => <button
         className={`triage-row ${selected === alert.sat_id ? 'focused' : ''}`}
         key={alert.alert_id}
         onClick={() => onSelect(alert.sat_id)}
       >
-        <span className="triage-rank num">{String(index + 1).padStart(2, '0')}</span>
         <span className="triage-main">
           <span className="triage-line"><strong>{alert.sat_id}</strong><span className={`severity ${alert.severity}`}>{alert.severity.toUpperCase()}</span></span>
           <span className={`triage-status ${alert.status}`}>{statusLabel(alert.status)}</span>
@@ -72,21 +71,13 @@ export function HypothesesPanel({ satId, message }) {
   </section>;
 }
 
-function stageForTool(tool) {
-  if (tool === 'simulate') return 'VERIFIES';
-  if (tool === 'request_approval') return 'APPROVES';
-  return 'PROPOSES';
-}
-
-export function TracePanel({ callout, rows, mode }) {
+export function TracePanel({ callout, rows }) {
   return <section className="hud-panel trace-panel" aria-label="Agent tool trace">
     <div className="trace-caption">{callout ?? 'Awaiting mission events'}</div>
-    <div className="trace-heading"><span>TOOL-CALL TRACE</span><span className="source-tag">{mode}</span></div>
+    <div className="trace-heading"><span>TOOL-CALL TRACE</span></div>
     <div className="trace-rows">
       {rows.length === 0 && <div className="trace-empty">No agent tools have run yet.</div>}
       {rows.slice(-4).map((row) => <div className="trace-row" key={row.id}>
-        <time className="num">{timeLabel(row.ts)}</time>
-        <span className="trace-stage">{stageForTool(row.tool)}</span>
         <strong>{row.tool}</strong>
         <span className="trace-args num" title={row.args}>{row.args}</span>
         <span className="trace-result num" title={row.result}>→ {row.result}</span>
@@ -108,7 +99,7 @@ export function TopBar({ phase, mode, time, speed, hasVerification, muted, onTog
     ? 2 : hasVerification ? 1 : 0;
   const complete = phase === 'fastforward' || phase === 'reveal';
   return <header className="top-bar">
-    <div className="top-brand"><strong>PENUMBRA</strong><span>24-SATELLITE MISSION CONTROL</span></div>
+    <div className="top-brand"><strong>PENUMBRA</strong></div>
     <div className="stage-stepper" aria-label="AI proposes, physics verifies, humans approve">
       {['AI PROPOSES', 'PHYSICS VERIFIES', 'HUMAN APPROVES'].map((label, index) => <div className={`stage ${complete ? 'done' : activeStage === index ? 'active' : ''}`} key={label}>{label}</div>)}
     </div>
@@ -128,7 +119,7 @@ export function DirectorSlot({ phase, approval, result, refusal, execution, pend
   const failed = result?.passes_all === false;
   const currentHash = approval?.plan_hash === result?.plan_hash;
   return <section className="hud-panel director-slot" aria-label="Flight Director">
-    <PanelHeading source="HUMAN">FLIGHT DIRECTOR</PanelHeading>
+    <PanelHeading>FLIGHT DIRECTOR</PanelHeading>
     {phase === 'attract' ? <>
       <button className="director-action storm" onClick={onStartStorm} disabled={pending}>
         {pending ? 'STARTING…' : 'FAULT STORM'}
@@ -142,14 +133,12 @@ export function DirectorSlot({ phase, approval, result, refusal, execution, pend
     </button> : executed ? <div className="director-executed">EXECUTED · {execution.plan_id}
       {phase === 'fastforward' && <small>Following the next eclipse at 600×</small>}
     </div> : approval && result ? <>
-      <div className="director-tier">TIER {approval.tier} · {approval.tier === 2 ? 'HUMAN REQUIRED' : 'FLIGHT RULE'}</div>
       <button className={`director-action ${failed ? 'failed' : 'verified'}`}
         onClick={onApprove} disabled={pending || !currentHash}>
         <span>{pending ? 'CHECKING…' : `APPROVE ${result.plan_id}`}</span>
         <small>TIER {approval.tier} · HASH {hashPrefix(result.plan_hash)}</small>
         {failed && <small>FAILED VERIFICATION · PHYSICS WILL VETO</small>}
       </button>
-      <div className="director-hash num">{approval.approval_id} · exact verified plan hash</div>
     </> : <div className="director-wait">Waiting for a verified plan</div>}
     {refusal && <div className="director-refusal" role="alert">
       <strong>REFUSED · PHYSICS VETO</strong>

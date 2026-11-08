@@ -7,7 +7,6 @@ import { createMatrixState, reduceMatrix, scheduleConflicts, worstPlausibleHypot
 import {
   advanceEclipse, approvalPayload, createFlightState, flightFocus, reduceFlight, ticketKey,
 } from './flightState.js';
-import { ScalePanel } from './ScalePanel.jsx';
 import { createVoicePlayer, loadMuted, saveMuted, shouldSpeak } from './voice.js';
 import { MatrixOverlay } from './Matrix.jsx';
 import { FlightOverlay } from './FlightOverlay.jsx';
@@ -234,18 +233,17 @@ function App() {
     {!showPanels && <>
       <div className="poster-line">Every satellite in that shadow<br />is running on battery.</div>
       <div className="fleet-ticker num">
-        <span>FLEET {fleet.sats.length} / 24</span>
-        <span>DAYLIGHT {String(daylight).padStart(2, '0')}</span>
-        <span>PENUMBRA {String(penumbra).padStart(2, '0')}</span>
-        <span>ECLIPSE {String(eclipse).padStart(2, '0')}</span>
-        <span>SIM CLOCK {fleet.speed}×</span>
+        <span>FLEET {fleet.sats.length}</span>
+        <span>DAYLIGHT {daylight}</span>
+        <span>PENUMBRA {penumbra}</span>
+        <span>ECLIPSE {eclipse}</span>
       </div>
     </>}
 
     {showPanels && !matrixOpen && !flightOpen && <>
       <TriageQueue alerts={panel.alerts} now={fleet.t} selected={selected} onSelect={setSelected} />
       <HypothesesPanel satId={selected} message={panel.hypotheses[selected]} />
-      <TracePanel callout={panel.callout} rows={panel.trace} mode={mode} />
+      <TracePanel callout={panel.callout} rows={panel.trace} />
     </>}
 
     {matrixOpen && !flightOpen && <MatrixOverlay satId={selected} matrix={activeMatrix}
@@ -262,7 +260,6 @@ function App() {
       reveal={flight.reveals[focus.satId]} socMin={SOC_MIN}
       chartPlanId={chartResult?.plan_id} chartHypothesis={worstPlausibleHypothesis(chartResult)} />}
 
-    {(!showPanels || panel.phase === 'reveal') && <ScalePanel />}
     <ProvenanceLegend localPreview={localPreview} />
     <DirectorSlot phase={panel.phase} approval={activeApproval} result={activeResult}
       refusal={activeRefusal} execution={flight.execution} pending={pending} error={actionError}
