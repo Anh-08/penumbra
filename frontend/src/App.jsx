@@ -11,6 +11,7 @@ import {
   createAnatomyState, keyAction, loadEnabled as loadAnatomyEnabled, reduceAnatomy, saveEnabled as saveAnatomyEnabled,
 } from './anatomy/anatomyState.js';
 import { createVoicePlayer, loadMuted, saveMuted, shouldSpeak } from './voice.js';
+import { createIncidentState, reduceIncident, requestBody } from './incidentState.js';
 import {
   createMcState, loadEnabled as loadMcEnabled, reduceMc, saveEnabled as saveMcEnabled,
 } from './montecarlo/mcState.js';
@@ -77,6 +78,7 @@ function App() {
   const [sceneError, setSceneError] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [runLive, setRunLive] = useState(false);
+  const [incident, dispatchIncident] = useReducer(reduceIncident, undefined, createIncidentState);
   const [skyVisible, setSkyVisible] = useState(() => {
     try { return window.localStorage.getItem('penumbra.sky') !== 'off'; } catch { return true; }
   });
@@ -254,6 +256,34 @@ function App() {
     if (next) voice.current.stop();
   }
 
+  // T42: the picker's options come from the API once; an older server (404) or one without a model key keeps
+  // the recorded incident as the only run.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch('/api/incident/options');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const options = await response.json();
+        if (!cancelled) dispatchIncident({ type: 'options_loaded', options });
+      } catch { if (!cancelled) dispatchIncident({ type: 'options_failed' }); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function startIncident() {
+    const body = requestBody(incident);
+    if (!body) return startStorm();
+    setPending(true);
+    setActionError(null);
+    try {
+      await postJson('/api/incident', body);
+      directed.current = true;
+      fastForward.current = null;
+    } catch (error) { setActionError(error.message); }
+    finally { setPending(false); }
+  }
+
   async function startStorm() {
     setPending(true);
     setActionError(null);
@@ -339,7 +369,8 @@ function App() {
     <DirectorSlot phase={panel.phase} approval={activeApproval} result={activeResult}
       refusal={activeRefusal} execution={flight.execution} pending={pending} error={actionError}
       runLive={runLive} onToggleRunLive={() => setRunLive((value) => !value)}
-      onStartStorm={startStorm} onApprove={approveSelected} onReveal={revealTruth} />
+      onStartStorm={startStorm} onApprove={approveSelected} onReveal={revealTruth}
+      incident={incident} dispatchIncident={dispatchIncident} onStartIncident={startIncident} />
   </div>;
 }
 
