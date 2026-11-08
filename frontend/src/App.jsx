@@ -4,7 +4,7 @@ import { createScene } from './scene.js';
 import { connectFleetSocket } from './fleetSocket.js';
 import { createPanelState, reducePanel } from './panelState.js';
 import { createMatrixState, reduceMatrix, scheduleConflicts, worstPlausibleHypothesis } from './matrixState.js';
-import { advanceEclipse, approvalPayload, createFlightState, reduceFlight } from './flightState.js';
+import { advanceEclipse, approvalPayload, createFlightState, reduceFlight, ticketKey } from './flightState.js';
 import { MatrixOverlay } from './Matrix.jsx';
 import { FlightOverlay } from './FlightOverlay.jsx';
 import {
@@ -124,7 +124,8 @@ function App() {
   }, [panel.phase]);
 
   useEffect(() => {
-    const executionApproval = flight.approvals[flight.execution?.plan_id];
+    const execution = flight.execution;
+    const executionApproval = execution ? flight.approvals[ticketKey(execution.sat_id, execution.plan_id)] : null;
     if (!executionApproval || directed.current
       || panel.phase !== 'approval' || fastForward.current) return;
     fastForward.current = { satId: executionApproval.sat_id, entered: false, stopping: false };
@@ -175,8 +176,7 @@ function App() {
   const activeResult = activeMatrix?.results.find((result) => result.plan_id === selectedPlanId)
     ?? activeMatrix?.results[0];
   const chartResult = activeMatrix?.complete ? activeMatrix.results[0] : null;
-  const activeApproval = flight.approvals[activeResult?.plan_id]?.sat_id === selected
-    ? flight.approvals[activeResult.plan_id] : null;
+  const activeApproval = activeResult ? flight.approvals[ticketKey(selected, activeResult.plan_id)] ?? null : null;
   const activeRefusal = attemptPlanId === activeResult?.plan_id ? flight.refusal : null;
   const showPanels = matrixOpen || flightOpen || panel.phase !== 'attract' || panel.alerts.length > 0 || panel.trace.length > 0
     || Object.keys(panel.hypotheses).length > 0;

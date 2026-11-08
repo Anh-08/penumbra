@@ -91,6 +91,23 @@ def test_fault_storm_plays_the_recorded_run_with_one_approval_click(api):
         assert (status["SAT-12"], status["SAT-07"], status["SAT-19"]) == (
             "auto_executed", "executed", "safe_mode_recommended")
 
+        # the physics veto on SAT-19 (infeasible): every plan has a ticket, a red one is refused in reveal
+        sat19 = [m["data"] for m in seen if m["type"] == "matrix" and m["data"]["complete"]
+                 and m["data"]["sat_id"] == "SAT-19"][-1]
+        red = {m["data"]["plan_id"]: m["data"] for m in seen
+               if m["type"] == "approval_request" and m["data"]["sat_id"] == "SAT-19"}
+        assert set(red) == {r["plan_id"] for r in sat19["results"]}
+        assert not any(r["passes_all"] for r in sat19["results"])
+        veto = red[sat19["results"][0]["plan_id"]]
+        refused = api.post("/api/approve", json={"approval_id": veto["approval_id"], "plan_hash": veto["plan_hash"]})
+        body = refused.json()
+        assert body["refused"] is True and body["reason_key"] == "failed_verification"
+        assert body["failing_hypotheses"]
+        msg = receive_until(ws, seen, lambda m: m["type"] == "approval_refused")
+        assert msg["data"] == {"approval_id": veto["approval_id"], "reason_key": "failed_verification",
+                               "failing_hypotheses": body["failing_hypotheses"]}
+        assert api.app.state.demo_state == "reveal"
+
     reveal = api.post("/api/reveal", json={"sat_id": "SAT-07"})
     assert reveal.status_code == 200 and reveal.json()["truth"]["kind"] == "stuck_on_load"
     storm = api.app.state.storm
