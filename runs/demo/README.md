@@ -2,8 +2,8 @@
 
 | File | What | Model |
 |---|---|---|
-| `live-single-stuck-load.jsonl` | T22 gate: scenario `single-stuck-load` (seed 0). SAT-09's AUX line stuck on; alert, agent, Flight Director approval (Tier 2), execution | Gemini `gemini-3.5-flash-lite`, live, recorded 2026-11-07 (re-recorded for T27) |
-| `live-fault-storm.jsonl` | T27: scenario `fault-storm` (seed 0). SAT-12 Tier 1 auto-executed (flight rule), SAT-07 Tier 2 approved and executed, SAT-19 infeasible with SAFE_MODE recommended | Gemini `gemini-3.5-flash-lite`, live, recorded 2026-11-07 |
+| `live-single-stuck-load.jsonl` | T22 gate: scenario `single-stuck-load` (seed 0). SAT-09's AUX line stuck on. Gemini tried AUX off (with duty 0.5) and AUX off: both failed verification (the relay is stuck); SAFE_MODE passed, the Flight Director approved it (Tier 2), executed | Gemini `gemini-3.5-flash-lite`, live, recorded 2026-11-07 on the T26 agent loop |
+| `live-fault-storm.jsonl` | T27: scenario `fault-storm` (seed 0). SAT-12 Tier 1 auto-executed (flight rule), SAT-07 Tier 2 approved and executed, SAT-19 infeasible with SAFE_MODE recommended | Gemini `gemini-3.5-flash-lite`, live, recorded 2026-11-07 on the T26 agent loop |
 
 Replay offline (no key, no network), for example:
 `PENUMBRA_REPLAY=runs/demo/live-fault-storm.jsonl PENUMBRA_REPLAY_PACE_MS=0 python -m backend.fleet.demo --scenario fault-storm --run-id replay-check --runs-dir /tmp`.

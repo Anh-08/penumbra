@@ -83,18 +83,22 @@ def synthetic_environment(sat_ids: tuple[str, ...], hours: float = 24.0, beta_de
     return env, contacts_from_mask(env.t, env.in_contact, env.sat_ids), None
 
 
-def single_stuck_load(seed: int = 0, sat_ids: tuple[str, ...] = SAT_IDS, hours: float = 24.0) -> Scenario:
+def single_stuck_load(seed: int = 0, sat_ids: tuple[str, ...] = SAT_IDS, hours: float = 24.0,
+                      focus: str | None = None) -> Scenario:
     """SAT-09's AUX line (25 W) sticks on two hours in, while it flies the payload at full duty.
 
     SAT-09 (beta about 42 deg, 35 % of each orbit in shadow) carries duty 1.0 when healthy. With the AUX
     line stuck on it does not: SOC heads for the 0.30 floor within about three hours of onset.
     LOAD_OFF(AUX) cannot help (the relay is stuck); cutting the payload duty or switching the payload off
     can. Every other satellite flies duty 0.5 and stays healthy.
+
+    `focus` moves the fault elsewhere; a fleet subset without SAT-09 (one-satellite benchmarks) puts it on
+    its first satellite.
     """
-    focus = "SAT-09"
     sat_ids = tuple(sat_ids)
+    focus = focus or ("SAT-09" if "SAT-09" in sat_ids else sat_ids[0])
     if focus not in sat_ids:
-        raise ValueError(f"single-stuck-load needs {focus} in the fleet")
+        raise ValueError(f"single-stuck-load: focus {focus} is not in the fleet")
     faults_ = [FaultSpec(kind="stuck_on_load", target=focus, params={"load": "AUX"}, onset_t=T0 + 2 * 3600.0)]
     # standing tasking, known to the ground: the focus satellite flies its payload at full duty
     tasking = {focus: [Command(t_exec=T0, name="SET_PAYLOAD_DUTY", args={"duty": 1.0})]}
