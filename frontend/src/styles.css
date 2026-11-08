@@ -119,3 +119,8 @@ button { font: inherit; }
   .provenance-legend, .attract-view .provenance-legend { width: calc(100% - 24px); margin-top: 60vh; min-height: 52px; }.panels-visible .provenance-legend { margin-top: 12px; }.attract-view .fleet-ticker { margin-top: 12px; flex-wrap: wrap; min-height: 56px; }
   .poster-line { top: 23%; left: 24px; font-size: 32px; }
 }
+.scale-panel-wide { width: 720px; }
+.scale-machines { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); }
+.scale-machine-block { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.scale-machine-title { font: 600 var(--fs-label) var(--font-cond); letter-spacing: .08em; color: var(--c-ink-2); }
+@media (max-width: 900px) { .scale-panel-wide { width: calc(100% - 24px); } .scale-machines { grid-template-columns: 1fr; } }
