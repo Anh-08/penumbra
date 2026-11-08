@@ -1,6 +1,6 @@
 export function createFlightState() {
   return {
-    approval: null,
+    approvals: {},
     refusal: null,
     execution: null,
     trajectory: null,
@@ -13,11 +13,11 @@ export function reduceFlight(state, message) {
   if (!message?.type || !message.data) return state;
   const data = message.data;
   if (message.type === 'approval_request') {
-    return { ...state, approval: data, refusal: null };
+    return { ...state, approvals: { ...state.approvals, [data.plan_id]: data }, refusal: null };
   }
   if (message.type === 'clear_refusal') return { ...state, refusal: null };
   if (message.type === 'approval_refused') {
-    if (state.approval && data.approval_id !== state.approval.approval_id) return state;
+    if (!Object.values(state.approvals).some((ticket) => ticket.approval_id === data.approval_id)) return state;
     return { ...state, refusal: data };
   }
   if (message.type === 'execution') return { ...state, execution: data, refusal: null };
@@ -39,7 +39,8 @@ export function reduceFlight(state, message) {
 }
 
 export function approvalPayload(approval, result) {
-  if (!approval?.approval_id || !result?.plan_hash) return null;
+  if (!approval?.approval_id || !result?.plan_hash
+    || approval.plan_id !== result.plan_id || approval.plan_hash !== result.plan_hash) return null;
   return { approval_id: approval.approval_id, plan_hash: result.plan_hash };
 }
 

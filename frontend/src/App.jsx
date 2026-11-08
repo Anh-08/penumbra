@@ -99,7 +99,6 @@ function App() {
         }
         if (message.type === 'approval_request') {
           setSelected(message.data.sat_id);
-          setSelectedPlanId(message.data.plan_id);
         }
         dispatch(message);
       };
@@ -128,16 +127,17 @@ function App() {
   }, [panel.phase]);
 
   useEffect(() => {
-    if (!flight.approval || flight.execution?.plan_id !== flight.approval.plan_id
+    const executionApproval = flight.approvals[flight.execution?.plan_id];
+    if (!executionApproval
       || panel.phase !== 'approval' || fastForward.current) return;
-    fastForward.current = { satId: flight.approval.sat_id, entered: false, stopping: false };
+    fastForward.current = { satId: executionApproval.sat_id, entered: false, stopping: false };
     postJson('/api/demo', { state: 'fastforward' })
       .then((data) => dispatch({ type: 'demo_state', data }))
       .catch((error) => { fastForward.current = null; setActionError(error.message); });
-  }, [flight.approval, flight.execution, panel.phase]);
+  }, [flight.approvals, flight.execution, panel.phase]);
 
   async function approveSelected() {
-    const payload = approvalPayload(flight.approval, activeResult);
+    const payload = approvalPayload(activeApproval, activeResult);
     if (!payload) return;
     setPending(true);
     setActionError(null);
@@ -166,7 +166,8 @@ function App() {
   const flightOpen = panel.phase === 'fastforward' || panel.phase === 'reveal';
   const activeResult = activeMatrix?.results.find((result) => result.plan_id === selectedPlanId)
     ?? activeMatrix?.results[0];
-  const activeApproval = flight.approval?.sat_id === selected ? flight.approval : null;
+  const activeApproval = flight.approvals[activeResult?.plan_id]?.sat_id === selected
+    ? flight.approvals[activeResult.plan_id] : null;
   const activeRefusal = attemptPlanId === activeResult?.plan_id ? flight.refusal : null;
   const showPanels = matrixOpen || flightOpen || panel.phase !== 'attract' || panel.alerts.length > 0 || panel.trace.length > 0
     || Object.keys(panel.hypotheses).length > 0;

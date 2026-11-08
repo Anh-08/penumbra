@@ -74,6 +74,11 @@ def create_app(provider: Any | None = None) -> FastAPI:
             if listener.full():
                 listener.get_nowait()
             listener.put_nowait(message)
+        if kind == "matrix" and message["data"]["complete"]:
+            ticket_for = getattr(source, "operator_ticket", None)
+            if ticket_for is not None:
+                for result in message["data"]["results"]:
+                    publish("approval_request", ticket_for(result["plan_id"]))
 
     app.state.publish = publish
 

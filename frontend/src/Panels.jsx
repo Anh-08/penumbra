@@ -119,6 +119,7 @@ export function DirectorSlot({ phase, approval, result, refusal, execution, pend
   const executed = execution?.plan_id === approval?.plan_id;
   const canReveal = phase === 'reveal' && executed;
   const failed = result?.passes_all === false;
+  const currentHash = approval?.plan_hash === result?.plan_hash;
   return <section className="hud-panel director-slot" aria-label="Flight Director">
     <PanelHeading source="HUMAN">FLIGHT DIRECTOR</PanelHeading>
     {canReveal ? <button className="director-action reveal" onClick={onReveal} disabled={pending}>
@@ -128,7 +129,7 @@ export function DirectorSlot({ phase, approval, result, refusal, execution, pend
     </div> : approval && result ? <>
       <div className="director-tier">TIER {approval.tier} · {approval.tier === 2 ? 'HUMAN REQUIRED' : 'FLIGHT RULE'}</div>
       <button className={`director-action ${failed ? 'failed' : 'verified'}`}
-        onClick={onApprove} disabled={pending}>
+        onClick={onApprove} disabled={pending || !currentHash}>
         <span>{pending ? 'CHECKING…' : `APPROVE ${result.plan_id}`}</span>
         <small>TIER {approval.tier} · HASH {hashPrefix(result.plan_hash)}</small>
         {failed && <small>FAILED VERIFICATION · PHYSICS WILL VETO</small>}

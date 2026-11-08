@@ -5,11 +5,12 @@ import {
 } from './flightState.js';
 
 test('approval uses the exact backend approval id and selected SimResult hash, including a failed plan', () => {
-  const approval = { approval_id: 'AP-3', plan_id: 'P-1', plan_hash: 'goodhash', sat_id: 'SAT-07', tier: 2 };
+  const approval = { approval_id: 'AP-3', plan_id: 'P-2', plan_hash: 'redhash', sat_id: 'SAT-07', tier: 2 };
   const failed = { plan_id: 'P-2', plan_hash: 'redhash', passes_all: false };
   const state = reduceFlight(createFlightState(), { type: 'approval_request', data: approval });
-  assert.deepEqual(approvalPayload(state.approval, failed),
+  assert.deepEqual(approvalPayload(state.approvals['P-2'], failed),
     { approval_id: 'AP-3', plan_hash: 'redhash' });
+  assert.equal(approvalPayload(state.approvals['P-2'], { ...failed, plan_hash: 'stale' }), null);
   assert.equal(hashPrefix(failed.plan_hash), 'redhash');
 });
 
@@ -26,6 +27,20 @@ test('refusal retains backend reason and failing hypotheses; execution clears it
   } });
   assert.equal(state.refusal, null);
   assert.equal(state.execution.plan_id, 'P-1');
+});
+
+test('each plan retains its own backend-issued approval ticket', () => {
+  let state = createFlightState();
+  state = reduceFlight(state, { type: 'approval_request', data: {
+    approval_id: 'AP-1', plan_id: 'P-1', plan_hash: 'good', sat_id: 'SAT-07', tier: 2,
+  } });
+  state = reduceFlight(state, { type: 'approval_request', data: {
+    approval_id: 'AP-2', plan_id: 'P-2', plan_hash: 'red', sat_id: 'SAT-07', tier: 2,
+  } });
+  assert.equal(state.approvals['P-1'].approval_id, 'AP-1');
+  assert.equal(state.approvals['P-2'].approval_id, 'AP-2');
+  assert.deepEqual(approvalPayload(state.approvals['P-2'], { plan_id: 'P-2', plan_hash: 'red' }),
+    { approval_id: 'AP-2', plan_hash: 'red' });
 });
 
 test('only finite downlinked SOC from fleet messages becomes observed chart points', () => {

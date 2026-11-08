@@ -97,6 +97,27 @@ def test_slow_scenario_build_returns_without_blocking_api_startup():
         assert api.post('/api/fault-storm').status_code == 200
 
 
+def test_complete_matrix_emits_one_operator_ticket_per_simulated_plan():
+    class TicketProvider(MockProvider):
+        def operator_ticket(self, plan_id):
+            return {
+                'approval_id': f'AP-{plan_id[2:]}', 'plan_id': plan_id,
+                'plan_hash': 'sample-hash', 'sat_id': 'SAT-07', 'tier': 2, 'sim_id': 'S-1',
+            }
+
+    app = create_app(provider=TicketProvider(t0=1_800_000_000.0))
+    with TestClient(app) as api:
+        with api.websocket_connect('/ws') as ws:
+            assert ws.receive_json()['type'] == 'fleet_state'
+            matrix = api.app.state.provider.sample_messages()['matrix']
+            matrix['complete'] = True
+            api.app.state.publish('matrix', matrix)
+            assert ws.receive_json()['type'] == 'matrix'
+            ticket = ws.receive_json()
+            assert ticket['type'] == 'approval_request'
+            assert ticket['data']['plan_id'] == 'P-1'
+
+
 def test_clock_runs_at_requested_speed_and_rejects_out_of_range():
     with client() as api:
         assert api.post('/api/clock', json={'speed': 1}).json()['speed'] == 1
