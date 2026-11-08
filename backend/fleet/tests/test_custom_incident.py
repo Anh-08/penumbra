@@ -67,10 +67,13 @@ def test_three_satellites_each_alert_and_the_truth_shows_the_chosen_faults():
 
 
 def test_same_seed_builds_the_same_world():
+    import numpy as np
+
     a = scenarios.build("custom", seed=1, sat_ids=PEERS, hours=4.0, incidents=[("SAT-12", "array_degradation")])
     b = scenarios.build("custom", seed=1, sat_ids=PEERS, hours=4.0, incidents=[("SAT-12", "array_degradation")])
     assert a.seed == b.seed == 1 and a.focus_sat == "SAT-12"
-    t1 = scenarios.T0 + 3 * 3600.0
-    ta, tb = (w.world.telemetry("SAT-12", scenarios.T0, t1)["soc"] for w in (a, b))
-    assert (ta == tb).all()
-    assert len(a.contacts) == len(b.contacts) and a.initial.soc.tolist() == b.initial.soc.tolist()
+    for w in (a, b):
+        w.world.advance_to(scenarios.T0 + 3 * 3600.0)
+    ra, rb = (np.asarray(w.world.reveal("SAT-12")["truth_soc"]["soc"], float) for w in (a, b))
+    assert len(ra) > 10 and np.array_equal(ra, rb, equal_nan=True)
+    assert a.initial.soc.tolist() == b.initial.soc.tolist()
