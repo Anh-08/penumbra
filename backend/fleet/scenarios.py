@@ -10,6 +10,8 @@ illumination with penumbra, real contact windows, real beta angles. The syntheti
 """
 from __future__ import annotations
 
+import math
+
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -110,6 +112,15 @@ def single_stuck_load(seed: int = 0, sat_ids: tuple[str, ...] = SAT_IDS, hours: 
 STORM_ONSET_S = 2 * 3600.0
 
 
+def _quantized(contact):
+    """A contact on whole seconds (AOS up, LOS down: still inside the real pass) and 0.1 deg elevation. Skyfield's
+    root finding and trig differ in the last bits between libm versions (CI runs an older glibc than the machine
+    that recorded the demo), and the uplink contact goes into the plan hash. Only the conjunction scenario uses this,
+    so the older scenarios and their recordings are unchanged."""
+    return contact.model_copy(update={"aos": float(math.ceil(contact.aos)), "los": float(math.floor(contact.los)),
+                                      "max_el_deg": round(contact.max_el_deg, 1)})
+
+
 def _whole_seconds(c):
     """A conjunction with its times on whole seconds. The orbit time grid carries ~1e-5 s of float noise that differs
     between machines; a burn executes at its window start and that time goes into the plan hash."""
@@ -121,6 +132,8 @@ def _world(name, seed, sat_ids, hours, faults_, soc0, tasking, focus=None, with_
     env, contacts, model = orbit_environment(tuple(sat_ids), hours=hours)
     soc = np.array([soc0.get(s, 0.75) for s in env.sat_ids])
     conj = [_whole_seconds(c) for c in model.conjunctions() if c.sat_id in env.sat_ids] if with_conjunctions else []
+    if with_conjunctions:
+        contacts = [_quantized(c) for c in contacts]
     maneuvers = None
     if conj:
         from backend.eps.maneuver import windows_by_sat
