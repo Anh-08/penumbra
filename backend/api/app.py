@@ -175,6 +175,8 @@ def create_app(provider: Any | None = None) -> FastAPI:
 
     @app.post("/api/scenario", response_model=ScenarioResponse)
     async def scenario(request: ScenarioRequest) -> ScenarioResponse:
+        if app.state.storm is not None and app.state.storm.busy:
+            await asyncio.to_thread(app.state.storm.cancel)
         if getattr(source, "background_scenario", False):
             task = app.state.scenario_task
             if task is not None and not task.done():
@@ -230,6 +232,9 @@ def create_app(provider: Any | None = None) -> FastAPI:
 
     @app.post("/api/demo", response_model=DemoStateMsg)
     async def demo(request: DemoRequest) -> DemoStateMsg:
+        storm = app.state.storm
+        if storm is not None and storm.busy:  # the storm director owns the state machine while it runs
+            return DemoStateMsg(state=app.state.demo_state, speed=clock.speed)
         return transition(request.state)
 
     @app.post("/api/approve", response_model=ApprovalRefused | ExecutionMsg)

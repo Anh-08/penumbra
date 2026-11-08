@@ -30,6 +30,9 @@ function App() {
   const hasApiFleet = useRef(false);
   const firstAlertSeen = useRef(false);
   const fastForward = useRef(null);
+  // A FAULT STORM run is directed by the API (backend/api/storm.py): it sends every demo_state, including
+  // fastforward and reveal, so the page must not drive those transitions itself.
+  const directed = useRef(false);
   const [fleet, setFleet] = useState(initialFleet);
   const [selected, setSelected] = useState('SAT-07');
   const [panel, dispatch] = useReducer(reducePanel, undefined, createPanelState);
@@ -73,7 +76,7 @@ function App() {
         dispatchMatrix(message);
         dispatchFlight(message);
         if (message.type === 'fleet_state') {
-          const flightStep = fastForward.current;
+          const flightStep = directed.current ? null : fastForward.current;
           const sat = flightStep && message.data.sats.find((item) => item.sat_id === flightStep.satId);
           if (sat) {
             const next = advanceEclipse(flightStep, sat.illum);
@@ -122,7 +125,7 @@ function App() {
 
   useEffect(() => {
     const executionApproval = flight.approvals[flight.execution?.plan_id];
-    if (!executionApproval
+    if (!executionApproval || directed.current
       || panel.phase !== 'approval' || fastForward.current) return;
     fastForward.current = { satId: executionApproval.sat_id, entered: false, stopping: false };
     postJson('/api/demo', { state: 'fastforward' })
@@ -160,6 +163,8 @@ function App() {
     setActionError(null);
     try {
       await postJson('/api/fault-storm', { live: runLive });
+      directed.current = true;
+      fastForward.current = null;
     } catch (error) { setActionError(error.message); }
     finally { setPending(false); }
   }

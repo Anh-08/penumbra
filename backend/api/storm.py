@@ -6,9 +6,12 @@ Dispatcher whose triage shows only that satellite) when its alert comes. Differe
 - it uses the API provider's backend, so fleet_state, approval and reveal see the same world;
 - every recorder event is streamed as `trace_event` (TeeRecorder), and hypotheses / matrix columns are published
   as their tool results arrive;
-- a Tier 2 plan is not approved by the driver: after the last satellite the director enters `approval` with that
-  satellite's plans ticketed, and the judge's Approve is the click that executes it. Then `fastforward` runs the
-  clock at 600x through that satellite's next eclipse and its next pass, and `reveal` pauses.
+- a Tier 2 plan is not approved by the driver: right after that satellite's run the director enters `approval`
+  (clock frozen, so its uplink window is still open) with every plan of that satellite ticketed, and waits for the
+  judge's Approve, which executes it. Then the storm resumes for the remaining satellites. At the end `fastforward`
+  runs the clock at 600x through the approved satellite's next eclipse and next pass, and `reveal` pauses.
+  With the recorded run that is: SAT-12 (Tier 1, auto) -> SAT-07 (approval) -> SAT-19 (infeasible, SAFE_MODE
+  recommended) -> fastforward -> reveal. Approving right after the run is also what the recording did.
 
 Demo states and clock speeds follow CONTRACTS (DEMO_SPEED). Sim time is frozen while the agent works.
 Pacing: model turns are PENUMBRA_REPLAY_PACE_MS apart (default 700); the clock moves at the state's speed.
@@ -47,7 +50,7 @@ class StormStatus:
     worked: list[str] = field(default_factory=list)
     outcomes: dict[str, dict] = field(default_factory=dict)
     error: str | None = None
-    wall_s: dict[str, float] = field(default_factory=dict)  # wall time from start to each phase
+    wall_s: list[tuple[str, float]] = field(default_factory=list)  # (state, wall s since start), in order
 
 
 def pace_ms() -> int:
@@ -64,6 +67,9 @@ class StormDirector:
         self.replay_path = Path(replay_path)
         self.status = StormStatus()
         self.pending: Pending | None = None
+        self.approved_sat: str | None = None
+        self._approved = threading.Event()
+        self._cancel = threading.Event()
         self._thread: threading.Thread | None = None
         self._t_start = 0.0
         self._current: str | None = None
@@ -78,17 +84,24 @@ class StormDirector:
         if self.busy:
             raise RuntimeError("a fault storm is already running")
         self.status = StormStatus(running=True, phase="storm")
-        self.pending = None
+        self.pending, self.approved_sat = None, None
+        self._approved.clear()
+        self._cancel.clear()
         self._t_start = time.monotonic()
         self._thread = threading.Thread(target=self._run, args=(live,), name="fault-storm", daemon=True)
         self._thread.start()
 
     def approved(self, sat_id: str) -> None:
-        """The Flight Director's plan executed: fast-forward through that satellite's next eclipse."""
-        if self.pending is None or self.pending.sat_id != sat_id or self.busy:
-            return
-        self._thread = threading.Thread(target=self._fastforward, args=(sat_id,), name="fastforward", daemon=True)
-        self._thread.start()
+        """The Flight Director's plan for the satellite on screen executed: the storm continues."""
+        if self.pending is not None and self.pending.sat_id == sat_id:
+            self.approved_sat = sat_id
+            self._approved.set()
+
+    def cancel(self, timeout: float = 5.0) -> None:
+        """Stop a running storm (a new scenario was requested)."""
+        self._cancel.set()
+        self._approved.set()
+        self.join(timeout)
 
     def join(self, timeout: float | None = None) -> None:
         if self._thread is not None:
@@ -117,7 +130,7 @@ class StormDirector:
             self.publish("callout", CalloutMsg(text=f"Fault storm stopped: {type(exc).__name__}. "
                                                     "Press FAULT STORM to replay the recorded run.", priority=1))
         finally:
-            self.status.running = self.pending is not None
+            self.status.running = False
 
     def _storm(self, live: bool) -> None:
         from backend.agent.dispatcher import Dispatcher
@@ -130,7 +143,7 @@ class StormDirector:
         model, mode = self.choose_model(live)
         self.status.mode = mode
         run_id = new_run_id(f"storm-{model_kind(model)}")
-        path = self.runs_dir / f"{run_id}.jsonl"
+        path = Path(self.runs_dir) / f"{run_id}.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
         self.status.run_id, self.status.path = run_id, str(path)
 
@@ -164,16 +177,23 @@ class StormDirector:
                     agent = run_agent(model, dispatcher, recorder)
                     self._current = None
                     self._after_agent(sat, agent, dispatcher)
+                    if self.pending is not None and self.pending.sat_id == sat:
+                        self._enter_approval(self.pending)
+                        self._approved.wait()  # the judge's click (sim time is frozen meanwhile)
+                        if self._cancel.is_set():
+                            return
+                        self.status.outcomes[sat]["executed"] = True
                     if len(self.status.outcomes) < len(STORM_SATS):
                         self._phase("storm")
                 provider.snapshot()
+                if self._cancel.is_set():
+                    return
                 if step_wall:
                     time.sleep(max(0.0, step_wall - (time.monotonic() - tick)))
 
-        if self.pending is not None:
-            self._enter_approval(self.pending)
-        else:
-            self._phase("reveal")
+        if self.approved_sat is not None:
+            self._fastforward(self.approved_sat)
+        self._phase("reveal")
 
     def _after_agent(self, sat: str, agent: Any, dispatcher: Any) -> None:
         provider, backend = self.provider, self.provider.locked_backend()
@@ -195,7 +215,7 @@ class StormDirector:
                 self.publish("execution", ExecutionMsg(plan_id=ticket.plan_id, sat_id=sat, status="auto_executed",
                                                        t=backend.now(), flight_rule=rule))
             elif self.pending is None:
-                self.pending = Pending(sat, dispatcher)  # the judge approves it after the storm
+                self.pending = Pending(sat, dispatcher)  # the judge approves it next, before time moves on
         with provider.lock:
             rank = provider.backend.rank(sat)
             if rank.status == "infeasible" and not out["executed"]:
@@ -224,38 +244,31 @@ class StormDirector:
         self._phase("approval")
 
     def _fastforward(self, sat: str) -> None:
+        """600x through the approved satellite's next eclipse and its next pass (truth comes down in passes)."""
         from backend.fleet.demo import next_eclipse
 
-        try:
-            provider = self.provider
-            backend = provider.locked_backend()
-            self._phase("fastforward")
-            env = provider.backend.env
-            t = backend.now()
-            eclipse = next_eclipse(env, sat, t)
-            stop = float(env.t[-1])
-            if eclipse is not None:
-                nxt = provider.backend.next_contact(sat, eclipse[1])
-                stop = min(stop, nxt.los if nxt is not None else eclipse[1])
-            step_wall = STEP_S / DEMO_SPEED["fastforward"] if pace_ms() > 0 else 0.0
-            while t < stop:
-                tick = time.monotonic()
-                t = min(t + STEP_S, stop)
-                with provider.lock:
-                    backend.advance_to(t)
-                    messages = provider.backend.detector.drain_messages()
-                for m in messages:
-                    self.publish(m["type"], m["data"])
-                provider.snapshot()
-                if step_wall:
-                    time.sleep(max(0.0, step_wall - (time.monotonic() - tick)))
-            self.pending = None
-            self._phase("reveal")
-        except Exception as exc:  # noqa: BLE001
-            self.status.error = f"{type(exc).__name__}: {exc}"
-            self.status.phase = "failed"
-        finally:
-            self.status.running = False
+        provider = self.provider
+        backend = provider.locked_backend()
+        self._phase("fastforward")
+        env = provider.backend.env
+        t = backend.now()
+        eclipse = next_eclipse(env, sat, t)
+        stop = float(env.t[-1])
+        if eclipse is not None:
+            nxt = provider.backend.next_contact(sat, eclipse[1])
+            stop = min(stop, nxt.los if nxt is not None else eclipse[1])
+        step_wall = STEP_S / DEMO_SPEED["fastforward"] if pace_ms() > 0 else 0.0
+        while t < stop and not self._cancel.is_set():
+            tick = time.monotonic()
+            t = min(t + STEP_S, stop)
+            with provider.lock:
+                backend.advance_to(t)
+                messages = provider.backend.detector.drain_messages()
+            for m in messages:
+                self.publish(m["type"], m["data"])
+            provider.snapshot()
+            if step_wall:
+                time.sleep(max(0.0, step_wall - (time.monotonic() - tick)))
 
     # ---------------------------------------------------------------- streaming
     def _on_event(self, event: Any) -> None:
@@ -269,8 +282,9 @@ class StormDirector:
                 sat_id=result.get("sat_id", sat), scores=result["scores"], plausible=result.get("plausible", []),
                 labels=result.get("labels") or {h: HYPOTHESIS_LABELS[h] for h in result["scores"]}))
         elif name == "simulate" and "sim_id" in result:
+            sim = {k: v for k, v in result.items() if k in SimResult.model_fields}  # drop hint / rank_status
             sims = self._sims.setdefault(sat, [])
-            sims[:] = [s for s in sims if s["plan_id"] != result["plan_id"]] + [result]
+            sims[:] = [s for s in sims if s["plan_id"] != sim["plan_id"]] + [sim]
             self.publish("matrix", MatrixMsg(sat_id=sat, results=[SimResult.model_validate(s) for s in sims],
                                              complete=False))
 
@@ -284,7 +298,7 @@ class StormDirector:
 
     def _phase(self, state: str) -> None:
         self.status.phase = state
-        self.status.wall_s[state] = round(time.monotonic() - self._t_start, 2)
+        self.status.wall_s.append((state, round(time.monotonic() - self._t_start, 2)))
         self.transition(state)
 
 
