@@ -1,4 +1,5 @@
-"""Demo scenarios (CONTRACTS.md): single-stuck-load, fault-storm and beta-season.
+"""Demo scenarios (CONTRACTS.md): single-stuck-load, fault-storm, beta-season, conjunction and the
+judge-chosen `custom` incident (T42).
 
 This is the one place outside backend/eps that writes fault specs: a scenario has to say what goes
 wrong. They go straight into an EpsWorld, which keeps them private; nothing here hands them out
@@ -195,8 +196,74 @@ def conjunction(seed: int = 0, sat_ids: tuple[str, ...] = SAT_IDS, hours: float 
                   with_conjunctions=True)
 
 
+# ---------- T42: operator-triggered incident ----------
+MAX_INCIDENTS = 3
+
+# What the judge can pick (id, operator label, spoken synonyms for the voice command) and the fault it injects.
+# Parameters and the SOC at T0 are tuned so that every satellite of the fleet raises its alert AFTER the onset and
+# inside six hours of it, whether it flies mostly in sunlight (SAT-07) or spends 35-40 % of each orbit in shadow
+# (SAT-12, SAT-19): the storm's milder values never alert a sunny satellite, and a lower SOC alerts a shadowed one
+# before the fault even starts. sensor_bias reads LOW and keeps drifting, so the ground sees a battery problem that
+# the truth does not have.
+FAULT_MENU = [
+    {"id": "array_degradation", "label": "Solar array degradation", "kind": "array_degradation",
+     "params": {"loss": 0.5, "panel": "ALL"}, "soc0": 0.80,
+     "spoken": ["array", "solar", "panel", "degradation"]},
+    {"id": "stuck_on_load", "label": "Stuck-on load (AUX)", "kind": "stuck_on_load",
+     "params": {"load": "AUX"}, "soc0": 0.65,
+     "spoken": ["stuck", "load", "aux", "relay"]},
+    {"id": "capacity_fade", "label": "Battery capacity fade", "kind": "capacity_fade",
+     "params": {"remaining": 0.20}, "soc0": 0.70,
+     "spoken": ["capacity", "fade", "battery", "aged"]},
+    {"id": "sensor_bias", "label": "SOC sensor bias", "kind": "sensor_bias",
+     "params": {"channel": "soc", "bias": -0.15, "drift_per_s": -3e-5}, "soc0": 0.70,
+     "spoken": ["sensor", "bias", "reading", "gauge"]},
+]
+FAULTS_BY_ID = {f["id"]: f for f in FAULT_MENU}
+
+
+def normalize_incidents(incidents, sat_ids: tuple[str, ...] = SAT_IDS) -> list[tuple[str, str]]:
+    """(sat_id, fault_id) pairs from tuples or {"sat_id", "fault"} dicts; 1..MAX_INCIDENTS, distinct satellites,
+    known ids only. Raises ValueError otherwise (the API turns that into 422)."""
+    pairs = []
+    for item in incidents or ():
+        if isinstance(item, dict):
+            sat, fault = item.get("sat_id"), item.get("fault")
+        else:
+            sat, fault = tuple(item)
+        if sat not in sat_ids:
+            raise ValueError(f"unknown satellite {sat!r}")
+        if fault not in FAULTS_BY_ID:
+            raise ValueError(f"unknown fault {fault!r}; choose one of {sorted(FAULTS_BY_ID)}")
+        pairs.append((str(sat), str(fault)))
+    if not pairs:
+        raise ValueError("an incident needs at least one satellite")
+    if len(pairs) > MAX_INCIDENTS:
+        raise ValueError(f"at most {MAX_INCIDENTS} satellites per incident")
+    if len({s for s, _ in pairs}) != len(pairs):
+        raise ValueError("each satellite at most once per incident")
+    return pairs
+
+
+def custom(seed: int = 0, sat_ids: tuple[str, ...] = SAT_IDS, hours: float = 24.0, incidents=()) -> Scenario:
+    """The judge's incident (T42): the chosen satellites get the chosen fault at T0 + 2 h while flying their
+    payload at full duty from the storm's SOC for that fault kind. Everyone else flies duty 0.5 and stays healthy.
+    Deterministic by seed; the focus satellite is the first one chosen."""
+    sat_ids = tuple(sat_ids)
+    pairs = normalize_incidents(incidents, sat_ids)
+    onset = T0 + STORM_ONSET_S
+    faults_, soc0, tasking = [], {}, {}
+    full = [Command(t_exec=T0, name="SET_PAYLOAD_DUTY", args={"duty": 1.0})]
+    for sat, fault_id in pairs:
+        menu = FAULTS_BY_ID[fault_id]
+        faults_.append(FaultSpec(kind=menu["kind"], target=sat, params=dict(menu["params"]), onset_t=onset))
+        soc0[sat] = menu["soc0"]
+        tasking[sat] = full
+    return _world("custom", seed, sat_ids, hours, faults_, soc0=soc0, tasking=tasking, focus=pairs[0][0])
+
+
 SCENARIOS = {"single-stuck-load": single_stuck_load, "fault-storm": fault_storm, "beta-season": beta_season,
-             "conjunction": conjunction}
+             "conjunction": conjunction, "custom": custom}
 
 
 def build(name: str, seed: int = 0, **kw) -> Scenario:
