@@ -11,7 +11,8 @@ fault). Nothing starts by itself: the picker shows the result and the operator p
 - 413 over 1 MB, 415 for anything but audio/webm or audio/ogg, 400 without an `audio` field, 502 if the model call
   fails. The audio and the key are never logged or echoed.
 - The multipart body is parsed here (one file field) so the API needs no extra dependency (python-multipart).
-- The fault menu is `scenarios.FAULT_MENU` (T42 PR A) when it exists, else the same four ids.
+- The fault menu and the satellite limit are `scenarios.FAULT_MENU` / `MAX_INCIDENTS` (T42 PR A) when they
+  exist, else the same four fault ids and 3.
 """
 from __future__ import annotations
 
@@ -68,6 +69,17 @@ def fault_menu() -> list[dict[str, str]]:
     if menu:
         return [{"id": str(f["id"]), "label": str(f.get("label", f["id"]))} for f in menu]
     return [dict(f) for f in _FALLBACK_MENU]
+
+
+def max_incidents() -> int:
+    """scenarios.MAX_INCIDENTS when T42 PR A is in, else 3."""
+    try:
+        from backend.fleet import scenarios
+
+        n = getattr(scenarios, "MAX_INCIDENTS", None)
+    except Exception:  # noqa: BLE001
+        n = None
+    return n if isinstance(n, int) and n > 0 else MAX_INCIDENTS
 
 
 # Deterministic parser ---------------------------------------------------------------------------------------
@@ -195,16 +207,17 @@ class VoiceCommand:
         from google.genai import types
 
         client = self._get_client()
+        limit = max_incidents()
         response = client.models.generate_content(
             model=self.model,
             contents=[types.Content(role="user", parts=[
                 types.Part.from_bytes(data=audio, mime_type=mime),
                 types.Part.from_text(text="Transcribe this command and return the JSON."),
             ])],
-            config=types.GenerateContentConfig(system_instruction=system_prompt(), temperature=0.0,
+            config=types.GenerateContentConfig(system_instruction=system_prompt(limit), temperature=0.0,
                                                response_mime_type="application/json"),
         )
-        return interpret(getattr(response, "text", None))
+        return interpret(getattr(response, "text", None), limit)
 
 
 # HTTP ---------------------------------------------------------------------------------------------------------

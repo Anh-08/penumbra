@@ -8,7 +8,8 @@ from backend.api.app import create_app
 from backend.api.providers import MockProvider
 from backend.api.voice import Voice
 from backend.api.voice_command import (
-    MAX_BYTES, UNAVAILABLE, VoiceCommand, fault_menu, interpret, parse_fault, parse_sats, system_prompt,
+    MAX_BYTES, UNAVAILABLE, VoiceCommand, fault_menu, interpret, max_incidents, parse_fault, parse_sats,
+    system_prompt,
 )
 
 CLIP = b"\x1aE\xdf\xa3" + bytes(range(256)) * 8 + b"\r\n--not-a-boundary\r\n"  # webm magic + binary noise
@@ -129,3 +130,18 @@ def test_model_failure_is_502_without_the_key_or_audio(tmp_path):
 def test_prompt_lists_menu_and_limit():
     prompt = system_prompt()
     assert "up to 3 satellites" in prompt and "SAT-07" in prompt and "null" in prompt
+
+
+def test_limit_and_menu_follow_the_scenario_module(tmp_path, monkeypatch):
+    from backend.fleet import scenarios
+
+    monkeypatch.setattr(scenarios, "MAX_INCIDENTS", 2, raising=False)
+    monkeypatch.setattr(scenarios, "FAULT_MENU", [{"id": "stuck_on_load", "label": "Stuck-on load (AUX)",
+                                                   "kind": "stuck_on_load", "params": {}}], raising=False)
+    assert max_incidents() == 2 and [f["id"] for f in fault_menu()] == ["stuck_on_load"]
+    reply = json.dumps({"transcript": "solar array on satellites one two three", "sats": [], "fault": "array_degradation"})
+    fake = FakeClient(reply)
+    with api(tmp_path, VoiceCommand(client=fake, model="gemini-test")) as client:
+        body = post(client).json()
+    assert body["sats"] == ["SAT-01", "SAT-02"] and body["fault"] is None
+    assert "up to 2 satellites" in fake.models.calls[0]["config"].system_instruction
