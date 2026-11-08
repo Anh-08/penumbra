@@ -1,5 +1,6 @@
 import { formatCountdown, formatDuration } from './panelState.js';
 import { hashPrefix } from './flightState.js';
+import { IncidentPicker } from './IncidentPicker.jsx';
 
 const HYPOTHESES = ['H0', 'H1', 'H2', 'H3', 'H4', 'H5'];
 
@@ -116,7 +117,7 @@ export function TopBar({ phase, mode, time, speed, hasVerification, muted, onTog
 }
 
 export function DirectorSlot({ phase, approval, result, refusal, execution, pending, error,
-  runLive, onToggleRunLive, onStartStorm, onApprove, onReveal }) {
+  runLive, onToggleRunLive, onStartStorm, onApprove, onReveal, incident, dispatchIncident, onStartIncident }) {
   const executed = Boolean(execution && approval && execution.plan_id === approval.plan_id
     && execution.sat_id === approval.sat_id);
   const canReveal = phase === 'reveal' && executed;
@@ -124,15 +125,9 @@ export function DirectorSlot({ phase, approval, result, refusal, execution, pend
   const currentHash = approval?.plan_hash === result?.plan_hash;
   return <section className="hud-panel director-slot" aria-label="Flight Director">
     <PanelHeading>FLIGHT DIRECTOR</PanelHeading>
-    {phase === 'attract' ? <>
-      <button className="director-action storm" onClick={onStartStorm} disabled={pending}>
-        {pending ? 'STARTING…' : 'FAULT STORM'}
-      </button>
-      <label className="run-live-switch">
-        <input type="checkbox" checked={runLive} onChange={onToggleRunLive} disabled={pending} />
-        Run live with Gemini next run
-      </label>
-    </> : canReveal ? <button className="director-action reveal" onClick={onReveal} disabled={pending}>
+    {phase === 'attract' ? <IncidentPicker state={incident} dispatch={dispatchIncident} pending={pending}
+      onStart={onStartIncident} onStartRecorded={onStartStorm} runLive={runLive} onToggleRunLive={onToggleRunLive} />
+    : canReveal ? <button className="director-action reveal" onClick={onReveal} disabled={pending}>
       {pending ? 'REVEALING…' : 'REVEAL TRUTH'}
     </button> : executed ? <div className="director-executed">EXECUTED · {execution.plan_id}
       {phase === 'fastforward' && <small>Following the next eclipse at 600×</small>}
