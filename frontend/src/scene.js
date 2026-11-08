@@ -22,6 +22,7 @@ import {
 } from 'cesium';
 import { markerAlpha, orbitTrack, STATIONS } from './mockFleet.js';
 import { createPinState, reducePin } from './pinState.js';
+import { glyphScale, glyphStyle, tintKey } from './satGlyph.js';
 import constellations from './data/constellations.json' with { type: 'json' };
 import buffaloPinUrl from './assets/buffalo-pin.svg';
 
@@ -30,6 +31,8 @@ const SHADOW_LENGTH_M = 15_000_000;
 const teal = Color.fromCssColorString('#65e9df');
 const amber = Color.fromCssColorString('#f6ad58');
 const red = Color.fromCssColorString('#f26f75');
+const TINTS = { teal, amber, red };
+const INITIAL_FOCUS = 'SAT-07';
 const BUFFALO = { lat: 42.886, lon: -78.878 };
 const CELESTIAL_RADIUS_M = 1_000_000_000;
 
@@ -85,9 +88,7 @@ function addBuffaloPin(viewer) {
 }
 
 function colorFor(sat) {
-  if (sat.illum < 0.05) return red.withAlpha(markerAlpha(sat.illum));
-  if (sat.illum < 0.95) return amber.withAlpha(markerAlpha(sat.illum));
-  return teal.withAlpha(markerAlpha(sat.illum));
+  return TINTS[tintKey(sat.illum)].withAlpha(markerAlpha(sat.illum));
 }
 
 function orientationFor(direction) {
@@ -209,19 +210,21 @@ export function createScene(container, initialState, onSelect) {
   const markers = new Map();
   const tracks = new Map();
   for (const sat of initialState.sats) {
+    const glyph = glyphStyle(sat, INITIAL_FOCUS);
     const marker = viewer.entities.add({
       name: sat.sat_id,
       position: Cartesian3.fromDegrees(sat.lon_deg, sat.lat_deg, sat.alt_km * 1000),
-      point: {
-        pixelSize: 7,
+      billboard: {
+        image: glyph.image,  // one shared SVG data URI; the per-frame update never changes it
+        width: glyph.width,
+        height: glyph.height,
+        scale: glyph.scale,
         color: colorFor(sat),
-        outlineColor: Color.fromCssColorString('#091522'),
-        outlineWidth: 2,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
       label: {
         text: sat.sat_id,
-        show: sat.sat_id === 'SAT-07',
+        show: sat.sat_id === INITIAL_FOCUS,
         font: '10px monospace',
         fillColor: Color.WHITE.withAlpha(0.7),
         outlineColor: Color.BLACK,
@@ -323,7 +326,7 @@ export function createScene(container, initialState, onSelect) {
       const marker = markers.get(sat.sat_id);
       if (!marker) continue;
       marker.position = Cartesian3.fromDegrees(sat.lon_deg, sat.lat_deg, sat.alt_km * 1000);
-      marker.point.color = colorFor(sat);
+      marker.billboard.color = colorFor(sat);
       marker.label.fillColor = colorFor(sat).withAlpha(Math.max(0.4, sat.illum));
     }
     if (state.t - previousTrackTime > 120) {
@@ -340,7 +343,10 @@ export function createScene(container, initialState, onSelect) {
     update,
     setHighlights: (focused, alerted) => {
       const visible = new Set([focused, ...alerted]);
-      for (const [satId, marker] of markers) marker.label.show = visible.has(satId);
+      for (const [satId, marker] of markers) {
+        marker.label.show = visible.has(satId);
+        marker.billboard.scale = glyphScale(satId, focused);
+      }
     },
     setMotionActive: (active) => { motionActive = active; },
     setSkyVisible: (visible) => { skyLines.show = visible; },
