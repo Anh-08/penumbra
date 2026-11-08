@@ -1,16 +1,19 @@
 {
-  "source": "runs/demo/live-single-stuck-load.jsonl",
   "response": {
     "tool_calls": [
       {
-        "name": "propose_plan",
         "args": {
-          "sat_id": "SAT-17",
           "commands": [
-            {"name": "LOAD_OFF", "args": {"load": "PAYLOAD"}}
-          ]
-        }
+            {
+              "name": "SAFE_MODE"
+            }
+          ],
+          "sat_id": "SAT-09"
+        },
+        "name": "propose_plan"
       }
     ]
-  }
+  },
+  "selected_plan_id": "P-3",
+  "source": "runs/demo/live-single-stuck-load.jsonl"
 }

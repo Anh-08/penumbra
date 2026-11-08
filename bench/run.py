@@ -28,15 +28,16 @@ from contracts import Command, Plan
 
 CACHE = Path(__file__).with_name("gemini_cache.json")
 DEFAULT_OUTPUT = Path(__file__).parent / "results" / "b1.json"
-SAT_ID = "SAT-17"
 
 
-def load_cached_proposal(path: Path = CACHE) -> Command:
+def load_cached_proposal(path: Path = CACHE, sat_id: str | None = None) -> Command:
     """Load the proposal tool call captured in the live flight recorder."""
     cached = json.loads(path.read_text())
     calls = cached["response"]["tool_calls"]
     proposals = [call for call in calls if call["name"] == "propose_plan"]
-    if len(proposals) != 1 or proposals[0]["args"]["sat_id"] != SAT_ID:
+    if sat_id is None:
+        sat_id = build("single-stuck-load").focus_sat
+    if len(proposals) != 1 or proposals[0]["args"]["sat_id"] != sat_id:
         raise ValueError("cache must contain one proposal for the focus satellite")
     commands = proposals[0]["args"]["commands"]
     if len(commands) != 1:
@@ -62,12 +63,12 @@ def _candidate_commands(t_exec: float) -> list[Command]:
     return commands
 
 
-def _truth(world, command: Command, end_t: float) -> dict[str, float | bool]:
+def _truth(world, sat_id: str, command: Command, end_t: float) -> dict[str, float | bool]:
     trial = copy.deepcopy(world)
-    trial.execute(SAT_ID, [command])
+    trial.execute(sat_id, [command])
     trial.advance_to(end_t)
-    soc = trial.reveal(SAT_ID)["truth_soc"]["soc"]
-    telemetry = trial.telemetry(SAT_ID)
+    soc = trial.reveal(sat_id)["truth_soc"]["soc"]
+    telemetry = trial.telemetry(sat_id)
     with np.errstate(all="ignore"):
         v_bus = float(np.nanmin(telemetry["v_bus"]))
         t_min = float(np.nanmin(telemetry["t_bat_c"]))
@@ -113,7 +114,8 @@ def run_benchmark(
 ) -> dict:
     if seeds < 1 or hours < 6 or monte_carlo < 1:
         raise ValueError("seeds and monte_carlo must be positive; hours must be at least 6")
-    cached = load_cached_proposal()
+    sat_id = build("single-stuck-load").focus_sat
+    cached = load_cached_proposal(sat_id=sat_id)
     arms: dict[str, list[dict]] = {
         name: [] for name in (
             "brute_force", "random_valid", "gemini_unverified", "gemini_verified"
@@ -122,10 +124,10 @@ def run_benchmark(
     rejected = 0
     rng = random.Random(1900)
     for seed in range(seeds):
-        scenario = build("single-stuck-load", seed=seed, sat_ids=(SAT_ID,), hours=hours)
+        scenario = build("single-stuck-load", seed=seed, sat_ids=(sat_id,), hours=hours)
         contact = next(
             c for c in scenario.contacts
-            if c.sat_id == SAT_ID and c.aos > float(scenario.env.t[0]) + 7200
+            if c.sat_id == sat_id and c.aos > float(scenario.env.t[0]) + 7200
         )
         t_exec = math.ceil(contact.aos / 10) * 10.0
         if t_exec >= contact.los:
@@ -135,7 +137,7 @@ def run_benchmark(
         baseline = scenario.world
         commands = _candidate_commands(t_exec)
         measured = {command.name + json.dumps(command.args, sort_keys=True): _truth(
-            baseline, command, float(scenario.env.t[-1])
+            baseline, sat_id, command, float(scenario.env.t[-1])
         ) for command in commands}
 
         def record(arm: str, command: Command) -> None:
@@ -154,7 +156,7 @@ def run_benchmark(
         proposed = Command(t_exec=t_exec, name=cached.name, args=cached.args)
         record("gemini_unverified", proposed)
         plan = Plan(
-            plan_id="P-1", sat_id=SAT_ID, kind="plan", uplink=contact,
+            plan_id="P-1", sat_id=sat_id, kind="plan", uplink=contact,
             commands=[proposed], created_by="gemini-cache",
         )
         verification = backend.simulate(plan, "all", monte_carlo)
@@ -171,6 +173,7 @@ def run_benchmark(
     result = {
         "n": seeds,
         "scenario": "single-stuck-load",
+        "focus_sat": sat_id,
         "hours": hours,
         "monte_carlo": monte_carlo,
         "candidate_grid": {
@@ -182,7 +185,8 @@ def run_benchmark(
             "size": 13,
         },
         "inputs": {
-            "real": ["one recorded Gemini proposal from runs/demo/live-single-stuck-load.jsonl"],
+            "real": [],
+            "recorded": ["Gemini proposal from runs/demo/live-single-stuck-load.jsonl"],
             "simulated": ["seeded EPS fault scenarios", "orbit/contact geometry", "telemetry and truth SOC"],
         },
         "measurement": (
