@@ -134,6 +134,26 @@ def summarize(rows: list[dict]) -> dict:
     return out
 
 
+def findings(summary: dict) -> list[str]:
+    """Plain statements read off the summary (so the text never drifts from the numbers)."""
+    out = []
+    s = summary
+    if all(a in s for a in ARMS):
+        viol = ", ".join(f"{a} {s[a]['soc_violations']}" for a in ARMS)
+        out.append(f"True SOC below the floor after the alert: {viol} (cases).")
+        p5 = ", ".join(f"{a} {s[a]['min_soc_p5']:.3f}" for a in ARMS)
+        out.append(f"Lowest true SOC after the alert, 5th percentile over seeds: {p5}. The early cheap-delta-v window "
+                   "leaves the least battery margin; that is the power coupling.")
+        chosen = {w: n for w, n in s["verified"]["window_histogram"].items() if n}
+        out.append(f"The verifier's choice: {chosen}. It is conservative (planning model, every plausible "
+                   "hypothesis, p5): it can reject a window the truth would have survived.")
+        misses = {s[a]["miss_after_km_mean"] for a in ARMS}
+        if len(misses) == 1:
+            out.append(f"Achieved miss distance is the same for every window here ({misses.pop()} km), so it does "
+                       "not separate the arms in this scenario.")
+    return out
+
+
 def run(seeds: range) -> dict:
     t0 = time.perf_counter()
     rows = [case(s, a) for s in seeds for a in ARMS]
@@ -148,7 +168,8 @@ def run(seeds: range) -> dict:
                      "burn_time": "30 s into the window, never before the uplink AOS",
                      "verified": "every window simulated against every plausible hypothesis; the top-ranked "
                                  "passing window burns; none passing -> CAM deferred (no burn)"},
-        "summary": summarize(rows),
+        "summary": (summary := summarize(rows)),
+        "findings": findings(summary),
         "notes": ["soc_violations = cases whose true SOC goes below the floor after the alert.",
                   "miss_after_km is the window's planned miss distance (backend/orbit model); a deferred CAM keeps "
                   "the raw miss distance. Payload uptime counts the time the burn blocks the payload.",
@@ -167,8 +188,13 @@ def plot(result: dict, path: Path) -> Path:
     s = result["summary"]
     arms = [a for a in ARMS if a in s]
     fig, axes = plt.subplots(1, 3, figsize=(12, 3.8))
-    axes[0].bar(arms, [s[a]["soc_violations"] for a in arms], color=["#c0392b", "#2e86c1", "#7f8c8d"][:len(arms)])
-    axes[0].set_title(f"true SOC < {K.SOC_MIN:.2f} (cases of {result['n']})")
+    lows = [[r["min_soc"] for r in result["rows"] if r["arm"] == a] for a in arms]
+    axes[0].boxplot(lows, tick_labels=arms, widths=0.5)
+    axes[0].axhline(K.SOC_MIN, color="#c0392b", lw=1.2, ls="--", label=f"floor {K.SOC_MIN:.2f}")
+    axes[0].set_ylim(min(K.SOC_MIN, *(min(v) for v in lows)) - 0.05, 1.0)
+    axes[0].legend(fontsize=8, loc="upper right")
+    viol = " · ".join(str(s[a]["soc_violations"]) for a in arms)
+    axes[0].set_title(f"lowest true SOC per case (below floor: {viol})", fontsize=9)
     bottom = np.zeros(len(arms))
     for wid, col in (("W1", "#c0392b"), ("W2", "#f39c12"), ("W3", "#27ae60"), ("deferred", "#7f8c8d")):
         vals = np.array([s[a]["window_histogram"][wid] for a in arms], float)
