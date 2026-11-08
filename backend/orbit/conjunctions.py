@@ -40,8 +40,14 @@ def _accel(r):
 
 def propagate(r0, v0, t0: float, times: np.ndarray, step_s: float = 10.0) -> np.ndarray:
     """Two-body positions (km) at `times`, from the state (r0, v0) at t0. RK4 with a fixed step."""
+    return propagate_states(r0, v0, t0, times, step_s)[0]
+
+
+def propagate_states(r0, v0, t0: float, times: np.ndarray, step_s: float = 10.0) -> tuple[np.ndarray, np.ndarray]:
+    """Two-body (positions km, velocities km/s) at `times`, from the state (r0, v0) at t0. RK4, fixed step."""
     times = np.asarray(times, float)
     out = np.empty((len(times), 3))
+    vout = np.empty((len(times), 3))
     for sign in (1.0, -1.0):
         sel = (times >= t0) if sign > 0 else (times < t0)
         if not sel.any():
@@ -59,11 +65,11 @@ def propagate(r0, v0, t0: float, times: np.ndarray, step_s: float = 10.0) -> np.
                 r = r + h / 6.0 * (k1r + 2 * k2r + 2 * k3r + k4r)
                 v = v + h / 6.0 * (k1v + 2 * k2v + 2 * k3v + k4v)
                 t += h
-            pos[tt] = r.copy()
+            pos[tt] = (r.copy(), v.copy())
         idx = np.nonzero(sel)[0]
         for i in idx:
-            out[i] = pos[times[i]]
-    return out
+            out[i], vout[i] = pos[times[i]]
+    return out, vout
 
 
 def load_debris(path: str | Path = DEFAULT_DEBRIS) -> list[dict]:
@@ -125,7 +131,7 @@ def find_conjunctions(model, debris: list[dict] | None = None, sat_ids=None) -> 
     sat_ids = list(sat_ids or model.assets.satellites)
     found = []
     for obj in debris:
-        d_pos = propagate(obj["r_km"], obj["v_km_s"], obj["epoch"], t)
+        d_pos, d_vel = propagate_states(obj["r_km"], obj["v_km_s"], obj["epoch"], t)
         for sat in sat_ids:
             s_pos = _sat_km(model, sat, t)
             dist = np.linalg.norm(s_pos - d_pos, axis=1)
@@ -134,8 +140,9 @@ def find_conjunctions(model, debris: list[dict] | None = None, sat_ids=None) -> 
             for k in np.nonzero(dist < COARSE_SCREEN_KM)[0]:
                 if 0 < k < len(t) - 1 and dist[k] <= dist[k - 1] and dist[k] <= dist[k + 1]:
                     fine = np.arange(t[k - 1], t[k + 1], 0.1)
-                    fd = np.linalg.norm(_sat_km(model, sat, fine) - propagate(obj["r_km"], obj["v_km_s"], obj["epoch"],
-                                                                             fine, step_s=1.0), axis=1)
+                    # refine from the grid state just before, so the fine search integrates 20 s, not hours
+                    fd = np.linalg.norm(_sat_km(model, sat, fine) - propagate(d_pos[k - 1], d_vel[k - 1], t[k - 1],
+                                                                             fine, step_s=0.5), axis=1)
                     j = int(np.argmin(fd))
                     if fd[j] <= CONJ_THRESHOLD_KM:
                         found.append((float(fine[j]), sat, obj["object_id"], float(fd[j]), obj.get("window_leads_s")))
