@@ -40,7 +40,11 @@ class Detector:
         commands: Callable[[str], list[Command]],
         initial: planning.InitialState,
         params=None,
+        conjunctions: Callable[[], list] | None = None,
     ) -> None:
+        """conjunctions() -> every Conjunction in the horizon (T31): conjunction alerts and burn loads."""
+        self._all_conjunctions = conjunctions or (lambda: [])
+        self._cj_alerts: dict[str, Alert] = {}
         self.env = env
         self.contacts = contacts
         self._telemetry = telemetry
@@ -80,7 +84,36 @@ class Detector:
             self._scores = scoring.score_fleet(self._evidence, prior=K.DETECT_PRIOR)
             for s in due:
                 self._update(s, t, self._telemetry(s))
-        return [self._active[s] for s in self.env.sat_ids if s in self._active]
+        self._update_conjunctions(t)
+        power = [self._active[s] for s in self.env.sat_ids if s in self._active]
+        return power + [self._cj_alerts[k] for k in sorted(self._cj_alerts)]
+
+    def _update_conjunctions(self, t: float) -> None:
+        """One alert per conjunction in the horizon, severity by time to TCA (T31); cleared once a burn executed."""
+        for cj in self._all_conjunctions():
+            burned = any(c.name == "CAM_BURN" and c.t_exec <= cj.tca for c in self._commands(cj.sat_id))
+            if cj.tca <= t or burned:
+                self._cj_alerts.pop(cj.conj_id, None)
+                continue
+            to_tca = cj.tca - t
+            sev = "critical" if to_tca < K.CONJ_CRITICAL_S else "warning" if to_tca < K.CONJ_WARNING_S else "watch"
+            nxt = self._next_contact(cj.sat_id, t)
+            old = self._cj_alerts.get(cj.conj_id)
+            if old is not None and SEVERITY_RANK[sev] <= SEVERITY_RANK[old.severity]:
+                upd = old.model_copy(update={"time_to_critical_s": to_tca, "next_contact_aos": nxt.aos if nxt else None})
+                self._cj_alerts[cj.conj_id] = upd
+                self._by_id[upd.alert_id] = upd
+                continue
+            alert = Alert(alert_id=f"AL-{next(self._ids)}", sat_id=cj.sat_id, severity=sev, time_to_critical_s=to_tca,
+                          next_contact_aos=nxt.aos if nxt else None, reason_key="conjunction")
+            self._cj_alerts[cj.conj_id] = alert
+            self._by_id[alert.alert_id] = alert
+            if sev in ("warning", "critical"):
+                self._outbox.append({"type": "alert", "data": alert})
+                text = (f"Flight, {cj.sat_id} conjunction with {cj.object_id}, "
+                        f"{{{alert.alert_id}.time_to_critical_min}} minutes to closest approach")
+                self._outbox.append({"type": "callout", "data": CalloutMsg(
+                    text=self.render(text), priority=1 if sev == "critical" else 2)})
 
     def drain_messages(self) -> list[dict]:
         """Queued WS messages, [{"type": "alert" | "callout", "data": model}], oldest first."""
@@ -142,9 +175,11 @@ class Detector:
         if len(t_fwd) < 2:
             return {}
         cmds = [c for c in self._commands(sat_id)]
-        full = planning.build_controls(self.env.t, [[cmds]], self._init_for(sat_id), self.params)
-        ctl = planning.Controls(switch=full.switch[:, :, :, k0:k1], duty=full.duty[:, :, k0:k1],
-                                setpoint=full.setpoint[:, :, k0:k1], n_commands=full.n_commands)
+        from backend.eps.maneuver import windows_by_sat
+
+        windows = windows_by_sat(self._all_conjunctions()).get(sat_id)
+        full = planning.build_controls(self.env.t, [[cmds]], self._init_for(sat_id), self.params, maneuvers=[windows])
+        ctl = full.window(k0, k1)
         names = tuple(score.plausible)
         hp = {h: {k: v for k, v in score.map_params.get(h, {}).items() if k != "onset_after_t"} for h in names}
         hyps = scoring._candidate_hyps(

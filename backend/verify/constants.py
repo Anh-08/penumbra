@@ -85,6 +85,10 @@ DETECT_PROJECTION_S = 12 * 3600.0
 CRITICAL_TTC_S = 3 * 3600.0
 CONTACT_MARGIN_S = 600.0
 
+# ---------------- conjunctions (T31) ----------------
+CONJ_CRITICAL_S = 2 * 3600.0     # time to TCA below this: critical
+CONJ_WARNING_S = 6 * 3600.0      # below this: warning; else watch
+
 # ---------------- tier policy (T23) ----------------
 # Tier 1 (auto-execute under a flight rule) needs at least this worst-case SOC margin above SOC_MIN.
 TIER1_MARGIN = 0.20

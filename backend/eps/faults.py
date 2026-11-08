@@ -165,7 +165,7 @@ class EpsWorld:
     """
 
     def __init__(self, env: truth.Environment, faults: Iterable[FaultSpec] = (), seed: int = 0,
-                 params: EpsParams | None = None, soc0=None, t_bat0_c=None) -> None:
+                 params: EpsParams | None = None, soc0=None, t_bat0_c=None, maneuvers: dict | None = None) -> None:
         self.__params = params or EpsParams()
         self.__faults = tuple(faults)
         for f in self.__faults:
@@ -177,6 +177,7 @@ class EpsWorld:
         self.__commands: dict[str, list[Command]] = {}
         self.__t_now = float(env.t[0])
         self.__cache: truth.TruthResult | None = None
+        self.__maneuvers = maneuvers       # {sat_id: {window_id: ManeuverWindow}} for CAM_BURN (T31)
 
     def __repr__(self) -> str:
         return f"EpsWorld(sats={len(self.__env.sat_ids)}, t_now={self.__t_now:.0f})"
@@ -254,5 +255,5 @@ class EpsWorld:
         if self.__cache is None:
             soc0, t0c = self.__init
             self.__cache = truth.run(self.__env, self.__commands, seed=self.__seed, params=self.__params,
-                                     mods=self.__mods, soc0=soc0, t_bat0_c=t0c)
+                                     mods=self.__mods, soc0=soc0, t_bat0_c=t0c, maneuvers=self.__maneuvers)
         return self.__cache

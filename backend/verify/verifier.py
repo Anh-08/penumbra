@@ -70,7 +70,11 @@ def is_safe_mode(plan: Plan) -> bool:
 
 
 class Verifier:
-    def __init__(self, env: Environment, belief: Callable[[str], Belief], params=None, seed: int = 0) -> None:
+    def __init__(self, env: Environment, belief: Callable[[str], Belief], params=None, seed: int = 0,
+                 conjunctions: Callable[[str], list] | None = None) -> None:
+        """conjunctions(sat_id) -> that satellite's Conjunctions (T31): the burn load of a CAM_BURN and the
+        horizon of a kind "maneuver" plan (first command to tca plus one orbit) come from it."""
+        self._conjunctions = conjunctions or (lambda sat_id: [])
         self.env = env
         self._belief = belief
         self.params = params or planning.planning_params()
@@ -150,6 +154,10 @@ class Verifier:
     # ------------------------------------------------------------------ internals
     def horizon_end(self, plan: Plan, t_state: float) -> float:
         end = float(self.env.t[-1])
+        if plan.kind == "maneuver" and plan.commands:
+            cjs = sorted(self._conjunctions(plan.sat_id), key=lambda c: c.tca)
+            if cjs:
+                end = min(end, cjs[0].tca + K.ORBIT_S)
         if plan.kind == "diagnostic" and plan.commands:
             end = min(end, max(c.t_exec for c in plan.commands) + K.DIAGNOSTIC_DWELL_S + K.ORBIT_S)
         return max(end, t_state + self.env.dt)
@@ -174,9 +182,11 @@ class Verifier:
         k1 = int(np.searchsorted(env.t, self.horizon_end(plan, b.t_state), side="right"))
         k1 = max(k1, k0 + 2)
         cmds = list(b.commands) + list(plan.commands)
-        full = planning.build_controls(env.t, [[cmds]], b.initial, self.params)
-        ctl = planning.Controls(switch=full.switch[:, :, :, k0:k1], duty=full.duty[:, :, k0:k1],
-                                setpoint=full.setpoint[:, :, k0:k1], n_commands=full.n_commands)
+        from backend.eps.maneuver import windows_by_sat
+
+        windows = windows_by_sat(self._conjunctions(plan.sat_id)).get(plan.sat_id)
+        full = planning.build_controls(env.t, [[cmds]], b.initial, self.params, maneuvers=[windows])
+        ctl = full.window(k0, k1)
         hyps = planning.Hypotheses.build([{h: b.hyp_params[h] for h in names if h in b.hyp_params}],
                                          names=tuple(names), params=self.params)
         init = planning.InitialState(soc=np.array([b.soc]), t_bat_c=np.array([b.t_bat_c]),

@@ -10,6 +10,8 @@ illumination with penumbra, real contact windows, real beta angles. The syntheti
 """
 from __future__ import annotations
 
+import math
+
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -36,6 +38,7 @@ class Scenario:
     focus_sat: str | None              # the satellite the story is about (for the UI), not the fault spec
     initial: InitialState              # what the ground believes at T0 (commanded config, SOC, temperature)
     orbit: object | None = field(default=None, repr=False)   # backend.orbit.OrbitModel (globe positions etc.)
+    conjunctions: list = field(default_factory=list)          # T31: Conjunctions with SIMULATED debris
 
     def next_contact(self, sat_id: str, t: float) -> Contact | None:
         """The contact in progress at t, else the next one to start; None if no more in the horizon."""
@@ -109,16 +112,40 @@ def single_stuck_load(seed: int = 0, sat_ids: tuple[str, ...] = SAT_IDS, hours: 
 STORM_ONSET_S = 2 * 3600.0
 
 
-def _world(name, seed, sat_ids, hours, faults_, soc0, tasking, focus=None) -> Scenario:
+def _quantized(contact):
+    """A contact on whole seconds (AOS up, LOS down: still inside the real pass) and 0.1 deg elevation. Skyfield's
+    root finding and trig differ in the last bits between libm versions (CI runs an older glibc than the machine
+    that recorded the demo), and the uplink contact goes into the plan hash. Only the conjunction scenario uses this,
+    so the older scenarios and their recordings are unchanged."""
+    return contact.model_copy(update={"aos": float(math.ceil(contact.aos)), "los": float(math.floor(contact.los)),
+                                      "max_el_deg": round(contact.max_el_deg, 1)})
+
+
+def _whole_seconds(c):
+    """A conjunction with its times on whole seconds. The orbit time grid carries ~1e-5 s of float noise that differs
+    between machines; a burn executes at its window start and that time goes into the plan hash."""
+    wins = [w.model_copy(update={"t_start": float(round(w.t_start)), "t_end": float(round(w.t_end))}) for w in c.windows]
+    return c.model_copy(update={"tca": float(round(c.tca)), "windows": wins})
+
+
+def _world(name, seed, sat_ids, hours, faults_, soc0, tasking, focus=None, with_conjunctions=False) -> Scenario:
     env, contacts, model = orbit_environment(tuple(sat_ids), hours=hours)
     soc = np.array([soc0.get(s, 0.75) for s in env.sat_ids])
-    world = EpsWorld(env, faults_, seed=seed, soc0=soc)
+    conj = [_whole_seconds(c) for c in model.conjunctions() if c.sat_id in env.sat_ids] if with_conjunctions else []
+    if with_conjunctions:
+        contacts = [_quantized(c) for c in contacts]
+    maneuvers = None
+    if conj:
+        from backend.eps.maneuver import windows_by_sat
+
+        maneuvers = windows_by_sat(conj)
+    world = EpsWorld(env, faults_, seed=seed, soc0=soc, maneuvers=maneuvers)
     for s, cmds in tasking.items():
         if s in env.sat_ids:
             world.execute(s, cmds)
     initial = InitialState.nominal(len(env.sat_ids), soc=soc, params=planning_params())
     return Scenario(name=name, seed=seed, env=env, contacts=contacts, world=world, focus_sat=focus,
-                    initial=initial, orbit=model)
+                    initial=initial, orbit=model, conjunctions=conj)
 
 
 def fault_storm(seed: int = 0, sat_ids: tuple[str, ...] = SAT_IDS, hours: float = 24.0) -> Scenario:
@@ -153,7 +180,23 @@ def beta_season(seed: int = 0, sat_ids: tuple[str, ...] = SAT_IDS, hours: float 
     return _world("beta-season", seed, sat_ids, hours, faults_, soc0={}, tasking={}, focus=None)
 
 
-SCENARIOS = {"single-stuck-load": single_stuck_load, "fault-storm": fault_storm, "beta-season": beta_season}
+def conjunction(seed: int = 0, sat_ids: tuple[str, ...] = SAT_IDS, hours: float = 24.0) -> Scenario:
+    """T31: SIMULATED debris DEB-01 passes SAT-17 0.3 km away at T0 + 5.2 h (data/debris/debris.json).
+
+    SAT-17 (40 % of each orbit in shadow, the tightest budget) flies its payload at full duty from SOC 0.74 and
+    recovers only ~5 % SOC per orbit. Three burn windows: W1 (cheap delta-v) inside its second eclipse while the
+    battery is still low, W2 and W3 (larger delta-v) in sunlight, W3 with the battery charged. A burn draws the
+    window's power for slew + burn with the payload off, so W1 risks the SOC floor and W3 does not: the power-coupled
+    choice is the verifier's. No hardware fault; every other satellite is nominal.
+    """
+    focus = "SAT-17"
+    tasking = {focus: [Command(t_exec=T0, name="SET_PAYLOAD_DUTY", args={"duty": 1.0})]}
+    return _world("conjunction", seed, sat_ids, hours, [], soc0={focus: 0.74}, tasking=tasking, focus=focus,
+                  with_conjunctions=True)
+
+
+SCENARIOS = {"single-stuck-load": single_stuck_load, "fault-storm": fault_storm, "beta-season": beta_season,
+             "conjunction": conjunction}
 
 
 def build(name: str, seed: int = 0, **kw) -> Scenario:

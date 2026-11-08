@@ -21,7 +21,7 @@ import numpy as np
 
 from contracts import DT, ESSENTIAL_LOADS, LOADS, SAT_IDS, Command, Contact
 
-from . import physics
+from . import maneuver, physics
 from .params import EpsParams
 
 L_IDX = {name: i for i, name in enumerate(LOADS)}
@@ -158,7 +158,9 @@ def run(
     mods: Modifiers | None = None,
     soc0: np.ndarray | float | None = None,
     t_bat0_c: np.ndarray | float | None = None,
+    maneuvers: dict | None = None,
 ) -> TruthResult:
+    """maneuvers: {sat_id: {window_id: ManeuverWindow}} for CAM_BURN commands (T31); None = no burns."""
     p = params or EpsParams()
     panels = tuple(p.panels)
     s_n, n = env.illum.shape
@@ -223,6 +225,13 @@ def run(
                                     "capacity_loss")}
 
     sched = _schedule(env.t, env.sat_ids, commands)
+    burn_w = np.zeros((s_n, n))
+    burn_block = np.zeros((s_n, n), bool)
+    if maneuvers:
+        for row, sat in enumerate(env.sat_ids):
+            if (commands or {}).get(sat):
+                burn_w[row], burn_block[row] = maneuver.burn_profile(env.t, commands[sat], maneuvers.get(sat),
+                                                                     p.cam_slew_s)
 
     for k in range(n):
         for row, c in sched.get(k, ()):
@@ -258,9 +267,9 @@ def run(
                                  np.where(temp > setpoint + half_band, False, heater_active))
         heater_active = heater_active | stuck[:, I_HEATER]   # a stuck heater relay also bypasses the thermostat
         frac = on.astype(float)
-        frac[:, I_PAYLOAD] *= duty
+        frac[:, I_PAYLOAD] *= duty * ~burn_block[:, k]
         frac[:, I_HEATER] *= heater_active
-        p_demand = (load_w * frac).sum(axis=1)
+        p_demand = (load_w * frac).sum(axis=1) + burn_w[:, k]
 
         p_pan = (panel_coef * (cos_inc[:, k] * env.illum[:, k])[:, None]
                  * m["array_factor"][:, :, k] * p.regulator_eff)            # (S, P) at the bus
