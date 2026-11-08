@@ -61,3 +61,22 @@ Files: `Dockerfile` (frontend build with Node 20, runtime Python 3.11 with the p
 - **"Run live" without keys:** it falls back to the replay with a callout. The server log contains no key material.
 - **Not run here:** `docker build` (this laptop's user has no access to the docker daemon) and `setup.sh` itself
   (it needs root, apt and ufw). Run `setup.sh` on the instance; if the image build fails, the log names the step.
+
+## Live mode (optional, T42)
+Judge-triggered incidents (START INCIDENT with chosen satellites and fault) have no recording, so they need a
+Gemini key on the server. Keys never go through a shell, the repo or the image: as root on the instance
+
+```bash
+install -d -m 700 /etc/penumbra
+cat > /etc/penumbra/live.env <<'ENV'
+GEMINI_API_KEY=<the key>
+GEMINI_MODEL=gemini-3.5-flash-lite
+PENUMBRA_OFFLINE=0
+ENV
+chmod 600 /etc/penumbra/live.env
+systemctl restart penumbra
+```
+
+`setup.sh` validates the file (only those three names) and prints `live mode: ON` without values. Anyone with the
+URL can then start live runs, so use a key on a project with billing (the free tier is 15 requests per minute for
+flash-lite) and rotate it after judging. To go back to replay only: `rm /etc/penumbra/live.env && systemctl restart penumbra`.
