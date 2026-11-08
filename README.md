@@ -1,10 +1,28 @@
 <p align="center"><img src="docs/media/banner.png" alt="Penumbra: verified AI mission ops for a 24-satellite LEO fleet. AI proposes, physics verifies, humans approve." width="100%"></p>
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=QapdEbnx69w"><b>Demo video (2:38)</b></a> ·
-  <a href="https://bullsinorbit.study/"><b>Live demo</b></a> ·
-  Built at UB Hacking 2026
+  <a href="https://www.youtube.com/watch?v=QapdEbnx69w"><img src="https://img.shields.io/badge/WATCH_THE_DEMO-2%3A38-FF0000?style=for-the-badge&logo=youtube&logoColor=white&labelColor=555555" alt="Watch the demo on YouTube, 2:38"></a>
+  <a href="https://devpost.com/software/penumbra-sp4gtd"><img src="https://img.shields.io/badge/READ_ON-DEVPOST-003E54?style=for-the-badge&logo=devpost&logoColor=white&labelColor=555555" alt="Read the project on Devpost"></a>
+  <a href="https://bullsinorbit.study/"><img src="https://img.shields.io/badge/LIVE_DEMO-BULLSINORBIT.STUDY-008A8A?style=for-the-badge&logo=godaddy&logoColor=white&labelColor=555555" alt="Live demo at bullsinorbit.study"></a>
 </p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Gemini-agent_%2B_voice-8E75B2?logo=googlegemini&logoColor=white" alt="Gemini: agent and voice commands">
+  <img src="https://img.shields.io/badge/ElevenLabs-voice_callouts-000000?logo=elevenlabs&logoColor=white" alt="ElevenLabs: voice callouts">
+  <img src="https://img.shields.io/badge/Vultr-public_demo-007BFC?logo=vultr&logoColor=white" alt="Vultr: public demo">
+  <img src="https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white" alt="Python 3.11">
+  <img src="https://img.shields.io/badge/UB_Hacking-2026-0B111A" alt="UB Hacking 2026">
+</p>
+
+<p align="center"><b>
+  <a href="https://www.youtube.com/watch?v=QapdEbnx69w">Demo video</a> ·
+  <a href="https://bullsinorbit.study/">Live demo</a> ·
+  <a href="https://devpost.com/software/penumbra-sp4gtd">Devpost</a> ·
+  <a href="#try-it">Try it</a> ·
+  <a href="#voice-command">Voice command</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#run-it-locally">Run it</a>
+</b></p>
 
 A satellite in low Earth orbit spends part of every orbit in Earth's shadow, running on its battery. If its power system fails there, operators may not hear about it until the next ground pass, and that pass gives them a few minutes to send the right command.
 
