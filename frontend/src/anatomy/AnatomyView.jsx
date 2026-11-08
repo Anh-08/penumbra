@@ -87,7 +87,7 @@ export default function AnatomyView({ state, dispatch, legend }) {
       camera.aspect = w / h;
       const vfov = THREE.MathUtils.degToRad(camera.fov);
       const hfov = 2 * Math.atan(Math.tan(vfov / 2) * camera.aspect);
-      const dist = sphere.radius / Math.sin(Math.min(vfov, hfov) / 2) * 1.04;
+      const dist = sphere.radius / Math.sin(Math.min(vfov, hfov) / 2) * 0.8;  // the sphere is loose around a flat bus
       camera.position.copy(sphere.center).add(new THREE.Vector3(0.55, 0.35, 0.76).normalize().multiplyScalar(dist));
       camera.near = dist / 50; camera.far = dist * 4;
       camera.updateProjectionMatrix();
@@ -151,7 +151,9 @@ export default function AnatomyView({ state, dispatch, legend }) {
       const b = body.getBoundingClientRect();
       const s = canvas.getBoundingClientRect();
       const focus = focusPart(latest.current);
+      const order = { left: 0, right: 0 };
       for (const { part: id, side } of table.callouts) {
+        const lane = order[side]++;  // each leader gets its own vertical, so they never run on top of each other
         const path = leaderRefs.current[id];
         const box = boxRefs.current[id];
         if (!path || !box) continue;
@@ -161,7 +163,7 @@ export default function AnatomyView({ state, dispatch, legend }) {
         const r = box.getBoundingClientRect();
         const ex = side === 'left' ? r.right - b.left : r.left - b.left;
         const ey = r.top - b.top + r.height / 2;
-        const knee = side === 'left' ? s.left - b.left + 14 : s.right - b.left - 14;
+        const knee = side === 'left' ? s.left - b.left + 10 + lane * 7 : s.right - b.left - 10 - lane * 7;
         path.setAttribute('d', `M${ex},${ey} H${knee} V${ay} H${ax}`);
         path.setAttribute('class', focus === id ? 'lit' : '');
       }

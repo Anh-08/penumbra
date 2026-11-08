@@ -107,3 +107,28 @@ test('paths are right-angle polylines and pointAt walks them end to end', () => 
   const end = pointAt(path, 0.999999);
   assert.ok(Math.abs(end[2] - 3) < 1e-3);
 });
+
+import { createSchematic, drawSchematic, FAULT_PART, faultDot, schematicSvg } from './index.js';
+
+test('2D schematic: every shape belongs to a known part, each hypothesis marks its part, H0 marks nothing', () => {
+  const sch = createSchematic();
+  assert.ok(sch.shapes.every((s) => PART_IDS.includes(s.part)));
+  for (const part of sch.parts) assert.ok(sch.anchors[part], part);
+  assert.deepEqual(FAULT_PART, { H0: null, H1: 'wings', H2: 'aux', H3: 'battery', H4: 'pcdu', H5: 'wings' });
+  assert.equal(faultDot(sch, 'H0'), null);
+  assert.deepEqual(faultDot(sch, 'H3'), { part: 'battery', x: 60, y: 55 });
+  const svg = schematicSvg(sch, { fault: 'H2', alert: '#f00' });
+  assert.match(svg, /^<svg[^>]*viewBox="0 0 120 80"/);
+  assert.match(svg, /data-fault="aux"/);
+  assert.equal((svg.match(/stroke="#f00"/g) ?? []).length, sch.shapes.filter((s) => s.part === 'aux').length);
+  assert.doesNotMatch(schematicSvg(sch), /data-fault/);
+});
+
+test('2D schematic paints to a Canvas 2D context', () => {
+  const calls = [];
+  const ctx = new Proxy({}, { get: (_, name) => (name in Object.prototype ? undefined : (...args) => calls.push(name)),
+    set: () => true });
+  const dot = drawSchematic(ctx, createSchematic(), { scale: 2, fault: 'H1' });
+  assert.equal(dot.part, 'wings');
+  assert.ok(calls.includes('stroke') && calls.includes('fill') && calls[0] === 'save' && calls.at(-1) === 'restore');
+});

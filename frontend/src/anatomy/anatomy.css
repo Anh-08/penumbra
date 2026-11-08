@@ -1,5 +1,5 @@
 /* SATELLITE ANATOMY (T37): blueprint view and attract card. Colours and type come from tokens.css. */
-.anatomy-card { position: absolute; z-index: var(--z-hud); left: calc(2 * var(--inset) + 420px + var(--gap)); bottom: calc(var(--strip-h) + 2 * var(--gap)); height: 72px; width: 300px; display: flex; align-items: center; gap: var(--sp-3); padding: 4px var(--sp-3) 4px 4px; color: var(--c-ink); text-align: left; cursor: pointer; font: inherit; }
+.anatomy-card { position: absolute; z-index: var(--z-hud); left: calc(2 * var(--inset) + 500px + var(--gap)); bottom: calc(var(--strip-h) + 2 * var(--gap)); height: 72px; width: 340px; display: flex; align-items: center; gap: var(--sp-3); padding: 4px var(--sp-3) 4px 4px; color: var(--c-ink); text-align: left; cursor: pointer; font: inherit; }
 .attract-view .anatomy-card { bottom: calc(56px + 2 * var(--gap)); }
 .anatomy-card canvas { width: 104px; height: 64px; flex: none; }
 .anatomy-card-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -48,7 +48,7 @@
   .anatomy-callout { padding: 4px 8px; }
   .callout-role { -webkit-line-clamp: 1; }
   .callout-fig { display: none; }
-  .anatomy-card { left: calc(2 * var(--inset) + 320px + var(--gap)); width: 260px; height: 52px; }
+  .anatomy-card { left: calc(2 * var(--inset) + 410px + var(--gap)); width: 300px; height: 52px; }
   .anatomy-card canvas { width: 72px; height: 44px; }
 }
 @media (max-width: 900px) {

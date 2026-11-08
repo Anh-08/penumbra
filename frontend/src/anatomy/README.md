@@ -25,6 +25,16 @@ flow.setLoad('PAYLOAD', false); // a non-essential load drops out of the path; B
 flow.dispose(); sat.dispose();
 ```
 
+2D schematic (T38's 2D / paper tiles): a minimal front cross-section as plain data.
+
+```js
+import { createSchematic, schematicSvg, drawSchematic, faultDot, FAULT_PART } from './anatomy/index.js';
+const sch = createSchematic();                    // { width: 120, height: 80, shapes, anchors, parts }
+el.innerHTML = schematicSvg(sch, { fault: 'H3' }); // red battery outline + red dot on the faulty part
+drawSchematic(ctx, sch, { x, y, scale, fault: 'H1' }); // the same into a Canvas 2D context
+FAULT_PART;  // H1/H5 -> wings, H2 -> aux, H3 -> battery, H4 -> pcdu, H0 -> null
+```
+
 - Part ids (`PART_IDS`): bus, wings, battery, pcdu, obc, adcs, star_tracker, gnss, sband, payload, heater, aux,
   propulsion. `'simple'` keeps `SIMPLE_PART_IDS` (structure, power chain and the switchable loads) for small tiles.
 - EPS load → part (`LOAD_PARTS`): BUS → obc, COMMS → sband, ADCS → adcs, PAYLOAD → payload, HEATER → heater,
