@@ -1,4 +1,5 @@
 import { formatCountdown, formatDuration } from './panelState.js';
+import { hashPrefix } from './flightState.js';
 
 const HYPOTHESES = ['H0', 'H1', 'H2', 'H3', 'H4', 'H5'];
 
@@ -129,13 +130,14 @@ export function DirectorSlot({ phase, approval, result, refusal, execution, pend
       <button className={`director-action ${failed ? 'failed' : 'verified'}`}
         onClick={onApprove} disabled={pending}>
         <span>{pending ? 'CHECKING…' : `APPROVE ${result.plan_id}`}</span>
+        <small>TIER {approval.tier} · HASH {hashPrefix(result.plan_hash)}</small>
         {failed && <small>FAILED VERIFICATION · PHYSICS WILL VETO</small>}
       </button>
-      <div className="director-hash num">hash {result.plan_hash?.slice(0, 8) ?? '—'} · {approval.approval_id}</div>
+      <div className="director-hash num">{approval.approval_id} · exact verified plan hash</div>
     </> : <div className="director-wait">Waiting for a verified plan</div>}
     {refusal && <div className="director-refusal" role="alert">
       <strong>REFUSED · PHYSICS VETO</strong>
-      <span>{refusal.reason_key.replaceAll('_', ' ')} · {refusal.failing_hypotheses.join(', ') || 'NO OVERRIDE'}</span>
+      <span>{refusal.reason_key.replaceAll('_', ' ')} · {refusal.failing_hypotheses.join(', ') || 'No failing hypotheses reported'} · No override exists.</span>
     </div>}
     {error && <div className="director-error" role="alert">{error}</div>}
   </section>;
