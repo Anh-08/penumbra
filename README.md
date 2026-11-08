@@ -15,6 +15,13 @@ Penumbra is mission ops for that moment. A Gemini agent reads the fleet and prop
 ## Try it
 Open [bullsinorbit.study](https://bullsinorbit.study/) and press **FAULT STORM**. Three satellites start failing. SAT-12 is fixed under a pre-approved flight rule, SAT-07 waits for your approval, and SAT-19 has no plan that survives every cause. Then the clock skips through the eclipse and the app reveals the fault it injected. The public demo replays a recorded live Gemini run at a fixed pace, so every visitor sees the same thing.
 
+## Voice command
+Hold **Ctrl+Alt** (or the mic button), say the incident, and let go. Gemini transcribes the clip and returns the satellites and the fault, and the incident picker fills itself in. Nothing starts until you press START INCIDENT.
+
+<p align="center"><img src="docs/media/voice-command.gif" alt="Holding Ctrl+Alt, the operator says 'Solar array degradation on satellites three and twelve'; Gemini's transcript appears and the picker selects satellites 03 and 12 and the solar array fault." width="88%"></p>
+
+Recorded with a live Gemini call on a local server; the wait for Gemini's reply is trimmed in the clip. Custom incidents and voice commands need a Gemini key on the server.
+
 ## How it works
 <p align="center"><img src="docs/media/how-it-works.svg" alt="Loop: simulated power telemetry from satellites on real orbits reaches the ground during a pass; detection and triage; a Gemini agent with a safety layer; a Monte Carlo verifier; a flight rule or a human approves the exact plan hash, or physics vetoes it; an uplink scheduler sends the command in a contact window." width="100%"></p>
 
@@ -42,7 +49,7 @@ No real satellite's telemetry appears anywhere. The UI always shows a Real / Sim
 | <img src="docs/media/03a-trace.jpg" alt="Triage queue with SAT-12, hypothesis bars and the agent's tool-call trace."> | <img src="docs/media/11-anatomy.jpg" alt="Satellite anatomy view listing each component, its power role and whether it is essential."> |
 
 ## Built with
-- **Gemini:** the agent runs on function calling, and push-to-talk voice commands are transcribed to text.
+- **Gemini:** the agent runs on function calling, and a push-to-talk clip (hold Ctrl+Alt) becomes a transcript, satellites and a fault.
 - **ElevenLabs:** spoken callouts for alerts and decisions, cached so the demo also runs offline.
 - **Vultr:** hosts the public replay demo and ran the B4 scale benchmark.
 - Python (FastAPI, Skyfield, NumPy, OR-Tools CP-SAT) and a Cesium + Vite frontend.
