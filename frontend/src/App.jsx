@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { buildFleetState } from './mockFleet.js';
 import { createScene } from './scene.js';
 import { connectFleetSocket } from './fleetSocket.js';
@@ -8,12 +8,20 @@ import {
   advanceEclipse, approvalPayload, createFlightState, flightFocus, reduceFlight, ticketKey,
 } from './flightState.js';
 import { ScalePanel } from './ScalePanel.jsx';
+import {
+  createAnatomyState, keyAction, loadEnabled as loadAnatomyEnabled, reduceAnatomy, saveEnabled as saveAnatomyEnabled,
+} from './anatomy/anatomyState.js';
 import { createVoicePlayer, loadMuted, saveMuted, shouldSpeak } from './voice.js';
 import { MatrixOverlay } from './Matrix.jsx';
 import { FlightOverlay } from './FlightOverlay.jsx';
 import {
   DirectorSlot, HypothesesPanel, ProvenanceLegend, TopBar, TracePanel, TriageQueue,
 } from './Panels.jsx';
+
+// SATELLITE ANATOMY (T37): three and the view load only on demand, never with the landing page.
+const AnatomyView = lazy(() => import('./anatomy/AnatomyView.jsx'));
+const AnatomyCard = lazy(() => import('./anatomy/AnatomyCard.jsx'));
+const ANATOMY_CARD_DELAY_MS = 1500;  // after first paint: the thumbnail never slows the boot
 
 const initialTime = Date.now() / 1000;
 const initialFleet = buildFleetState(initialTime);
@@ -48,6 +56,11 @@ function App() {
   const [matrix, dispatchMatrix] = useReducer(reduceMatrix, undefined, createMatrixState);
   const [flight, dispatchFlight] = useReducer(reduceFlight, undefined, createFlightState);
   const [selectedPlanId, setSelectedPlanId] = useState(null);
+  const [anatomy, dispatchAnatomyRaw] = useReducer(reduceAnatomy, undefined, () => {
+    try { return createAnatomyState(loadAnatomyEnabled(window.localStorage)); } catch { return createAnatomyState(); }
+  });
+  const dispatchAnatomy = useCallback((action) => dispatchAnatomyRaw(action), []);
+  const [anatomyCardReady, setAnatomyCardReady] = useState(false);
   const [attemptPlanId, setAttemptPlanId] = useState(null);
   const [pending, setPending] = useState(false);
   const [actionError, setActionError] = useState(null);
@@ -140,6 +153,28 @@ function App() {
 
   useEffect(() => { scene.current?.setSkyVisible?.(skyVisible); }, [skyVisible]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAnatomyCardReady(true), ANATOMY_CARD_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event) => {
+      const target = event.target;
+      const typing = target instanceof HTMLElement
+        && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+      const action = event.ctrlKey || event.metaKey || event.altKey ? null : keyAction(event.key, anatomy, typing);
+      if (action) { event.preventDefault(); dispatchAnatomy(action); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [anatomy, dispatchAnatomy]);
+
+  function toggleAnatomy() {
+    saveAnatomyEnabled(window.localStorage, !anatomy.enabled);
+    dispatchAnatomy({ type: 'toggle_chip' });
+  }
+
   function toggleSky() {
     setSkyVisible((visible) => {
       const next = !visible;
@@ -228,6 +263,7 @@ function App() {
     <TopBar phase={panel.phase} mode={mode} time={fleet.t} speed={fleet.speed}
       hasVerification={matrixOpen || panel.trace.some((row) => row.tool === 'simulate')}
       skyVisible={skyVisible} onToggleSky={toggleSky}
+      anatomyOn={anatomy.enabled} onToggleAnatomy={toggleAnatomy}
       muted={muted} onToggleVoice={toggleVoice} />
     {reconnecting && hasApiFleet.current && <div className="reconnect-badge" role="status">RECONNECTING · showing last state</div>}
 
@@ -263,7 +299,13 @@ function App() {
       chartPlanId={chartResult?.plan_id} chartHypothesis={worstPlausibleHypothesis(chartResult)} />}
 
     {(!showPanels || panel.phase === 'reveal') && <ScalePanel />}
+    {anatomy.enabled && anatomyCardReady && !showPanels && <Suspense fallback={null}>
+      <AnatomyCard onOpen={() => dispatchAnatomy({ type: 'open' })} />
+    </Suspense>}
     <ProvenanceLegend localPreview={localPreview} />
+    {anatomy.open && <Suspense fallback={<div className="anatomy-view anatomy-loading" role="status">Loading the anatomy view…</div>}>
+      <AnatomyView state={anatomy} dispatch={dispatchAnatomy} legend={<ProvenanceLegend localPreview={localPreview} />} />
+    </Suspense>}
     <DirectorSlot phase={panel.phase} approval={activeApproval} result={activeResult}
       refusal={activeRefusal} execution={flight.execution} pending={pending} error={actionError}
       runLive={runLive} onToggleRunLive={() => setRunLive((value) => !value)}

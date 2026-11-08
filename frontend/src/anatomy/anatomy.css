@@ -1,0 +1,59 @@
+/* SATELLITE ANATOMY (T37): blueprint view and attract card. Colours and type come from tokens.css. */
+.anatomy-card { position: absolute; z-index: var(--z-hud); left: calc(2 * var(--inset) + 500px + var(--gap)); bottom: calc(var(--strip-h) + 2 * var(--gap)); height: 72px; width: 340px; display: flex; align-items: center; gap: var(--sp-3); padding: 4px var(--sp-3) 4px 4px; color: var(--c-ink); text-align: left; cursor: pointer; font: inherit; }
+.attract-view .anatomy-card { bottom: calc(56px + 2 * var(--gap)); }
+.anatomy-card canvas { width: 104px; height: 64px; flex: none; }
+.anatomy-card-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.anatomy-card-text strong { font: 600 var(--fs-label) var(--font-cond); letter-spacing: var(--track-label); }
+.anatomy-card-text span { font-size: var(--fs-label); color: var(--c-ink-3); }
+.anatomy-card:hover, .anatomy-card:focus-visible { border-color: var(--c-ink-3); }
+
+.anatomy-view { position: fixed; inset: 0; z-index: var(--z-presenter); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; color: var(--c-ink);
+  background-color: var(--c-space);
+  background-image: linear-gradient(var(--c-line) 1px, transparent 1px), linear-gradient(90deg, var(--c-line) 1px, transparent 1px);
+  background-size: 48px 48px; background-position: -1px -1px; }
+.anatomy-head { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-4); padding: var(--sp-3) var(--sp-5); border-bottom: 1px solid var(--c-line-strong); background: var(--c-panel-solid); }
+.anatomy-title { display: flex; align-items: baseline; gap: var(--sp-4); white-space: nowrap; }
+.anatomy-title strong { font: 600 var(--fs-title) var(--font-cond); letter-spacing: .12em; }
+.anatomy-title > span:not(.source-tag) { color: var(--c-ink-2); font: 500 var(--fs-label) var(--font-cond); letter-spacing: var(--track-label); }
+.anatomy-actions { display: flex; gap: var(--sp-2); }
+.anatomy-toggle, .anatomy-close { border: 1px solid var(--c-line-strong); border-radius: var(--r-1); padding: 5px 10px; background: transparent; color: var(--c-ink-2); font: 600 var(--fs-label) var(--font-cond); letter-spacing: var(--track-label); cursor: pointer; }
+.anatomy-toggle[aria-pressed="true"] { color: var(--c-alert); border-color: var(--c-alert); }
+.anatomy-toggle:focus-visible, .anatomy-close:focus-visible, .anatomy-callout:focus-visible, .anatomy-card:focus-visible { outline: 2px solid var(--c-alert); outline-offset: 2px; }
+
+.anatomy-body { position: relative; display: grid; grid-template-columns: minmax(250px, 22%) minmax(0, 1fr) minmax(250px, 22%); gap: var(--sp-5); padding: var(--sp-4) var(--sp-5); min-height: 0; }
+.anatomy-col { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; justify-content: space-between; gap: var(--sp-2); min-height: 0; z-index: 2; }
+.anatomy-stage { position: relative; min-height: 0; z-index: 1; }
+.anatomy-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+.anatomy-leaders { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 1; }
+.anatomy-leaders path { fill: none; stroke: var(--c-ink-3); stroke-width: 1; opacity: .55; }
+.anatomy-leaders path.lit { stroke: var(--c-alert); stroke-width: 1.5; opacity: 1; }
+
+.anatomy-callout { width: 100%; display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; border: 1px solid var(--c-line-strong); border-radius: 0; background: var(--c-panel-solid); color: var(--c-ink); text-align: left; font: inherit; cursor: pointer; }
+.anatomy-callout.lit { border-color: var(--c-alert); box-shadow: inset 3px 0 0 var(--c-alert); }
+.anatomy-callout.off { opacity: .55; }
+.anatomy-callout[aria-pressed="true"] .callout-head strong::after { content: ' · PINNED'; color: var(--c-alert); }
+.callout-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-2); }
+.callout-head strong { font: 600 var(--fs-label) var(--font-cond); letter-spacing: .04em; }
+.callout-load { flex: none; color: var(--c-ink-3); font: 500 var(--fs-label) var(--font-cond); letter-spacing: .04em; }
+.callout-role { color: var(--c-ink-2); font-size: var(--fs-label); line-height: var(--lh-tight); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.callout-meta { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.callout-hyp { color: var(--c-alert); font: 500 var(--fs-label) var(--font-cond); }
+.callout-fig { color: var(--c-ink-3); font: 400 var(--fs-label) var(--font-data); }
+
+.anatomy-foot { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-4); padding: var(--sp-2) var(--sp-5); border-top: 1px solid var(--c-line-strong); background: var(--c-panel-solid); color: var(--c-ink-2); font-size: var(--fs-label); }
+.anatomy-foot .provenance-legend { position: static; width: auto; height: auto; box-shadow: none; }
+
+@media (max-width: 1500px) {
+  .anatomy-body { grid-template-columns: minmax(230px, 24%) minmax(0, 1fr) minmax(230px, 24%); gap: var(--sp-3); padding: var(--sp-2) var(--sp-3); }
+  .anatomy-callout { padding: 4px 8px; }
+  .callout-role { -webkit-line-clamp: 1; }
+  .callout-fig { display: none; }
+  .anatomy-card { left: calc(2 * var(--inset) + 410px + var(--gap)); width: 300px; height: 52px; }
+  .anatomy-card canvas { width: 72px; height: 44px; }
+}
+@media (max-width: 900px) {
+  .anatomy-card { position: relative; left: auto; bottom: auto; width: calc(100% - 24px); margin: 12px; }
+  .anatomy-body { grid-template-columns: 1fr; overflow: auto; }
+  .anatomy-stage { min-height: 50vh; }
+  .anatomy-leaders { display: none; }
+}
