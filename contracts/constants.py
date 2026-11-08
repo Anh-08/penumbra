@@ -62,8 +62,19 @@ COMMAND_ARGS: dict[str, tuple[str, ...]] = {
     "SAFE_MODE": (),
 }
 COMMAND_NAMES: tuple[str, ...] = tuple(COMMAND_ARGS)
+# T31: the collision-avoidance burn, kept apart so code built on the five commands above keeps working until it
+# opts in. The Command model accepts the union.
+CAM_COMMAND_ARGS: dict[str, tuple[str, ...]] = {"CAM_BURN": ("window_id",)}   # a backend-offered window W1..W3
+ALL_COMMAND_ARGS: dict[str, tuple[str, ...]] = {**COMMAND_ARGS, **CAM_COMMAND_ARGS}
+ALL_COMMAND_NAMES: tuple[str, ...] = tuple(ALL_COMMAND_ARGS)
 PAYLOAD_DUTY_RANGE = (0.0, 1.0)
 HEATER_SETPOINT_RANGE_C = (-5.0, 20.0)
+
+# Conjunctions (T31): every manoeuvre window ends at least this long before the time of closest approach.
+CAM_LEAD_S = 1800.0
+CAM_WINDOW_IDS: tuple[str, ...] = ("W1", "W2", "W3")
+CONJ_ID_PATTERN = r"^CJ-\d+$"
+DEBRIS_ID_PATTERN = r"^DEB-\d{2}$"
 
 # Agent tools (exact names)
 AGENT_TOOLS: tuple[str, ...] = (
@@ -76,6 +87,8 @@ AGENT_TOOLS: tuple[str, ...] = (
     "schedule_uplink",
     "request_approval",
 )
+# T31 tools, kept apart so code built on the eight above keeps working until it adds them.
+AGENT_TOOLS_CAM: tuple[str, ...] = ("get_conjunctions",)
 
 # Demo director
 DEMO_STATES: tuple[str, ...] = ("attract", "storm", "agent", "approval", "fastforward", "reveal")
@@ -89,7 +102,7 @@ DEMO_SPEED: dict[str, float] = {
     "fastforward": 600.0,
     "reveal": 0.0,
 }
-DEMO_SCENARIOS: tuple[str, ...] = ("single-stuck-load", "fault-storm", "beta-season")
+DEMO_SCENARIOS: tuple[str, ...] = ("single-stuck-load", "fault-storm", "beta-season", "conjunction")
 
 # Recorder / replay
 RECORDER_KINDS: tuple[str, ...] = (

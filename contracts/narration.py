@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import re
 
-# {<sim_id | plan_id | approval_id | alert_id>.<field>}; the field may be a dotted path.
-PLACEHOLDER_RE = re.compile(r"\{(?:S-\d+|P-\d+|AP-\d+|AL-\d+)\.[A-Za-z_][A-Za-z0-9_.]*\}")
-ALLOWED_ID_RE = re.compile(r"\b(?:SAT-\d{2}|[PS]-\d+|AP-\d+|AL-\d+|FR-\d+|H\d|T\d{2})\b")
+# {<sim_id | plan_id | approval_id | alert_id | conj_id>.<field>}; the field may be a dotted path.
+PLACEHOLDER_RE = re.compile(r"\{(?:S-\d+|P-\d+|AP-\d+|AL-\d+|CJ-\d+)\.[A-Za-z_][A-Za-z0-9_.]*\}")
+ALLOWED_ID_RE = re.compile(r"\b(?:SAT-\d{2}|[PS]-\d+|AP-\d+|AL-\d+|FR-\d+|H\d|T\d{2}|CJ-\d+|DEB-\d{2}|W[1-3])\b")
 DIGIT_RE = re.compile(r"\d+")
 MAX_NARRATION_RETRIES = 2
 

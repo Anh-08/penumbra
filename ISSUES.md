@@ -7,7 +7,7 @@ Gates from the plan:
 - Sat 18:00: orbit
 - Sat 22:00: truth sim + verifier
 - Sun 02:00: single-sat loop end-to-end
-- Sun 06:00: feature freeze
+- Sun 09:30: feature freeze (moved from 06:00 by human B on Sun 02:25; MORNING DIGEST stays at 06:00)
 - Sun 09:00: numbers locked
 
 ## Human tasks (not seeded)
