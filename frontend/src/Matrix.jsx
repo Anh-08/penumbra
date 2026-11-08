@@ -30,7 +30,7 @@ function utcTime(t) {
 function ScheduleConflict({ conflict }) {
   if (!conflict) return null;
   return <section className="schedule-conflict" aria-label="Uplink schedule details">
-    <div className="schedule-title"><span>UPLINK SCHEDULE · CONTENTION</span><span className="source-tag">SCHEDULE</span></div>
+    <div className="schedule-title"><span>UPLINK SCHEDULE · CONTENTION</span></div>
     <div className="schedule-lines">
       {conflict.stations.map((station) => <span className="station-conflict" key={station.station_id}>
         <b>{station.station_id}</b> {station.windows.map((window) =>
@@ -54,7 +54,6 @@ export function MatrixOverlay({ satId, matrix, hypotheses, conflict, status, sel
   return <section className="hud-panel matrix-overlay" aria-label="Plan by hypothesis matrix">
     <div className="matrix-heading">
       <div><strong>{satId}</strong><span>PLAN × HYPOTHESIS</span></div>
-      <span className="source-tag">SIM · VERIFIER</span>
     </div>
     {infeasible && <div className="infeasible-banner">
       <strong>INFEASIBLE</strong><span>No plan survives every plausible cause · Recommend SAFE_MODE</span>
@@ -70,7 +69,7 @@ export function MatrixOverlay({ satId, matrix, hypotheses, conflict, status, sel
             <span className={`matrix-verdict ${result.passes_all ? 'passed' : 'failed'}`}>
               {result.passes_all ? 'PASSES ALL' : 'FAILS'}
             </span>
-            {backendFirstPlanId === result.plan_id && <small>{infeasible ? 'RECOMMEND SAFE_MODE' : 'BEST · VERIFIER'}</small>}
+            {backendFirstPlanId === result.plan_id && <small>{infeasible ? 'RECOMMEND SAFE_MODE' : 'BEST'}</small>}
           </button>)}
         </div>
         {HYPOTHESES.map((hypothesis, rowIndex) => <div className="matrix-row" role="row" key={hypothesis}>
@@ -87,7 +86,6 @@ export function MatrixOverlay({ satId, matrix, hypotheses, conflict, status, sel
     </div>
     <div className="matrix-footer">
       <span>{matrix.complete ? 'VERIFICATION COMPLETE' : 'SIMULATIONS ARRIVING'}</span>
-      <span>{infeasible ? 'BACKEND STATUS INFEASIBLE' : matrix.complete ? 'BACKEND RANK ORDER' : 'AWAITING BACKEND RANK'}</span>
     </div>
     <div className="matrix-lower">
       <ScheduleConflict conflict={conflict} />
