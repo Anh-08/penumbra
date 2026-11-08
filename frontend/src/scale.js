@@ -39,3 +39,7 @@ export function formatSeconds(seconds) {
   if (!Number.isFinite(seconds)) return '—';
   return seconds < 1 ? `${Math.round(seconds * 1000)} ms` : `${seconds.toFixed(1)} s`;
 }
+
+export function solverLabel(solver) {
+  return solver === 'cpsat' ? 'CP-SAT' : String(solver ?? '').toUpperCase();
+}

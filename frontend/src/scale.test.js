@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
-  b4From, formatRate, formatSeconds, machineLabel, scaleRow, schedulerRow, SCALE_STOPS, stopLabel,
+  b4From, formatRate, formatSeconds, machineLabel, scaleRow, schedulerRow, SCALE_STOPS, solverLabel, stopLabel,
 } from './scale.js';
 
 const b4 = JSON.parse(readFileSync(new URL('../../bench/results/b4.json', import.meta.url), 'utf8'));
@@ -32,4 +32,6 @@ test('scheduler line uses the largest request count and numbers are formatted', 
   assert.equal(formatSeconds(12.597), '12.6 s');
   assert.equal(formatRate(37655835.2), '37.7 M evals/s');
   assert.equal(formatRate(undefined), '—');
+  assert.equal(solverLabel('cpsat'), 'CP-SAT');
+  assert.equal(solverLabel('greedy'), 'GREEDY');
 });

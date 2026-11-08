@@ -119,7 +119,8 @@ export function TopBar({ phase, mode, time, speed, hasVerification, muted, onTog
 
 export function DirectorSlot({ phase, approval, result, refusal, execution, pending, error,
   runLive, onToggleRunLive, onStartStorm, onApprove, onReveal }) {
-  const executed = execution?.plan_id === approval?.plan_id;
+  const executed = Boolean(execution && approval && execution.plan_id === approval.plan_id
+    && execution.sat_id === approval.sat_id);
   const canReveal = phase === 'reveal' && executed;
   const failed = result?.passes_all === false;
   const currentHash = approval?.plan_hash === result?.plan_hash;

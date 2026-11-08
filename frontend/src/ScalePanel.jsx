@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  b4From, formatRate, formatSeconds, machineLabel, scaleRow, schedulerRow, SCALE_STOPS, stopLabel,
+  b4From, formatRate, formatSeconds, machineLabel, scaleRow, schedulerRow, SCALE_STOPS, solverLabel, stopLabel,
 } from './scale.js';
 
 export function ScalePanel() {
@@ -30,8 +30,8 @@ export function ScalePanel() {
     </label>
     {row ? <div className="scale-figures num">
       <span>{satellites.toLocaleString('en-US')} sats × {row.hypotheses} hyp × {row.plans} plans × {row.monte_carlo} MC</span>
-      <span>verify sweep {row.hours} h: {formatSeconds(row.wall_s)} · {formatRate(row.evals_per_s)} · {Math.round(row.peak_ram_mib)} MiB</span>
-      {sched && <span>scheduler: {sched.requests} uplinks, {sched.solver.toUpperCase()}{sched.optimal ? ' optimal' : ''}, {formatSeconds(sched.solve_ms / 1000)}</span>}
+      <span>verify {row.hours} h: {formatSeconds(row.wall_s)} · {formatRate(row.evals_per_s)} · {Math.round(row.peak_ram_mib)} MiB</span>
+      {sched && <span>schedule {sched.requests} uplinks: {solverLabel(sched.solver)}{sched.optimal ? ' optimal' : ''} · {formatSeconds(sched.solve_ms / 1000)}</span>}
     </div> : <div className="scale-figures">{b4 ? 'No measurement at this scale.' : 'Loading measurements…'}</div>}
     <div className="scale-machine">{machineLabel(b4)}{satellites > 24 ? ' · fleets above 24 repeat the 24 real orbits (load test)' : ''}</div>
   </section>;
