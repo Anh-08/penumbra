@@ -26,7 +26,7 @@ import numpy as np
 
 from contracts import ESSENTIAL_LOADS, FAULT_KINDS, HYPOTHESES, LOADS, Command
 
-from . import physics
+from . import maneuver, physics
 from .params import PLANNING, EpsParams
 
 log = logging.getLogger("penumbra.eps.planning")
@@ -154,11 +154,22 @@ class Controls:
     duty: np.ndarray         # (S, P, N)
     setpoint: np.ndarray     # (S, P, N)
     n_commands: np.ndarray   # (S, P)
+    extra_w: np.ndarray | None = None        # (S, P, N) CAM_BURN load (T31); None = none
+    payload_block: np.ndarray | None = None  # (S, P, N) bool, payload forced off during a burn
+
+    def window(self, k0: int, k1: int) -> "Controls":
+        """The same controls restricted to grid steps [k0, k1)."""
+        return Controls(switch=self.switch[:, :, :, k0:k1], duty=self.duty[:, :, k0:k1],
+                        setpoint=self.setpoint[:, :, k0:k1], n_commands=self.n_commands,
+                        extra_w=None if self.extra_w is None else self.extra_w[:, :, k0:k1],
+                        payload_block=None if self.payload_block is None else self.payload_block[:, :, k0:k1])
 
 
 def build_controls(t: np.ndarray, plans: list[list[list[Command]]], init: InitialState,
-                   params: EpsParams | None = None) -> Controls:
-    """plans[s][p] = command list of plan p for satellite s. Satellites with fewer plans get no-op plans."""
+                   params: EpsParams | None = None, maneuvers: list[dict | None] | None = None) -> Controls:
+    """plans[s][p] = command list of plan p for satellite s. Satellites with fewer plans get no-op plans.
+
+    maneuvers[s] = {window_id: ManeuverWindow} of satellite s's conjunction, for CAM_BURN commands (T31)."""
     p = params or planning_params()
     s_n, n = len(plans), len(t)
     n_plans = max(1, max((len(x) for x in plans), default=1))
@@ -166,10 +177,16 @@ def build_controls(t: np.ndarray, plans: list[list[list[Command]]], init: Initia
     duty = np.empty((s_n, n_plans, n))
     sp = np.empty((s_n, n_plans, n))
     n_cmd = np.zeros((s_n, n_plans), int)
+    extra = block = None
+    if maneuvers is not None and any(maneuvers):
+        extra = np.zeros((s_n, n_plans, n))
+        block = np.zeros((s_n, n_plans, n), bool)
     for si in range(s_n):
         for pi in range(n_plans):
             cmds = sorted(plans[si][pi], key=lambda c: c.t_exec) if pi < len(plans[si]) else []
             n_cmd[si, pi] = len(cmds)
+            if extra is not None and maneuvers[si]:
+                extra[si, pi], block[si, pi] = maneuver.burn_profile(t, cmds, maneuvers[si], p.cam_slew_s)
             cur_sw = init.switch[si].copy()
             cur_duty, cur_sp = float(init.payload_duty[si]), float(init.heater_setpoint_c[si])
             k0 = 0
@@ -194,7 +211,7 @@ def build_controls(t: np.ndarray, plans: list[list[list[Command]]], init: Initia
                     cur_sw[I_AUX] = False
                     cur_duty, cur_sp = 0.0, float(p.safe_heater_setpoint_c)
                 cur_sw[ESSENTIAL] = True
-    return Controls(switch=sw, duty=duty, setpoint=sp, n_commands=n_cmd)
+    return Controls(switch=sw, duty=duty, setpoint=sp, n_commands=n_cmd, extra_w=extra, payload_block=block)
 
 
 # ----------------------------------------------------------------------------- result
@@ -291,8 +308,12 @@ def simulate_batch(
         heater_active = heater_active | on[..., I_HEATER] & stuck[..., I_HEATER]
         heater_on = on[..., I_HEATER] & heater_active
         payload = on[..., I_PAYLOAD] * duty
+        if ctl.payload_block is not None:
+            payload = payload * ~ctl.payload_block[:, None, :, None, k]
         base = (on[..., other] * w[other]).sum(axis=-1)
         p_demand = load_factor * (base + payload * w[I_PAYLOAD] + heater_on * w[I_HEATER])
+        if ctl.extra_w is not None:
+            p_demand = p_demand + ctl.extra_w[:, None, :, None, k].astype(dtype)
         p_avail = p_sun[:, :, None, None, k] * array_factor
 
         voc = (p.n_series * physics.ocv_cell(soc, soc_grid, ocv_grid)).astype(dtype, copy=False)
