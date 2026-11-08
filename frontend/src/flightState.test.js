@@ -1,16 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  advanceEclipse, approvalPayload, createFlightState, hashPrefix, observedPoints, reduceFlight,
+  advanceEclipse, approvalPayload, createFlightState, hashPrefix, observedPoints, reduceFlight, ticketKey,
 } from './flightState.js';
 
 test('approval uses the exact backend approval id and selected SimResult hash, including a failed plan', () => {
   const approval = { approval_id: 'AP-3', plan_id: 'P-2', plan_hash: 'redhash', sat_id: 'SAT-07', tier: 2 };
   const failed = { plan_id: 'P-2', plan_hash: 'redhash', passes_all: false };
   const state = reduceFlight(createFlightState(), { type: 'approval_request', data: approval });
-  assert.deepEqual(approvalPayload(state.approvals['P-2'], failed),
+  assert.deepEqual(approvalPayload(state.approvals['SAT-07/P-2'], failed),
     { approval_id: 'AP-3', plan_hash: 'redhash' });
-  assert.equal(approvalPayload(state.approvals['P-2'], { ...failed, plan_hash: 'stale' }), null);
+  assert.equal(approvalPayload(state.approvals['SAT-07/P-2'], { ...failed, plan_hash: 'stale' }), null);
   assert.equal(hashPrefix(failed.plan_hash), 'redhash');
 });
 
@@ -37,9 +37,9 @@ test('each plan retains its own backend-issued approval ticket', () => {
   state = reduceFlight(state, { type: 'approval_request', data: {
     approval_id: 'AP-2', plan_id: 'P-2', plan_hash: 'red', sat_id: 'SAT-07', tier: 2,
   } });
-  assert.equal(state.approvals['P-1'].approval_id, 'AP-1');
-  assert.equal(state.approvals['P-2'].approval_id, 'AP-2');
-  assert.deepEqual(approvalPayload(state.approvals['P-2'], { plan_id: 'P-2', plan_hash: 'red' }),
+  assert.equal(state.approvals['SAT-07/P-1'].approval_id, 'AP-1');
+  assert.equal(state.approvals['SAT-07/P-2'].approval_id, 'AP-2');
+  assert.deepEqual(approvalPayload(state.approvals['SAT-07/P-2'], { plan_id: 'P-2', plan_hash: 'red' }),
     { approval_id: 'AP-2', plan_hash: 'red' });
 });
 
@@ -80,4 +80,14 @@ test('fast-forward stops only after the selected satellite enters and exits ecli
   update = advanceEclipse(update.step, 1);
   assert.equal(update.complete, true);
   assert.equal(advanceEclipse(update.step, 1).complete, false);
+});
+
+test('tickets of two satellites with the same plan id do not overwrite each other', () => {
+  let state = createFlightState();
+  state = reduceFlight(state, { type: 'approval_request', data: {
+    approval_id: 'AP-1', plan_id: 'P-1', plan_hash: 'sat07', sat_id: 'SAT-07', tier: 2, sim_id: 'S-1' } });
+  state = reduceFlight(state, { type: 'approval_request', data: {
+    approval_id: 'AP-1', plan_id: 'P-1', plan_hash: 'sat19', sat_id: 'SAT-19', tier: 2, sim_id: 'S-2' } });
+  assert.equal(state.approvals[ticketKey('SAT-07', 'P-1')].plan_hash, 'sat07');
+  assert.equal(state.approvals[ticketKey('SAT-19', 'P-1')].plan_hash, 'sat19');
 });

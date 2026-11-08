@@ -6,6 +6,9 @@ Dispatcher whose triage shows only that satellite) when its alert comes. Differe
 - it uses the API provider's backend, so fleet_state, approval and reveal see the same world;
 - every recorder event is streamed as `trace_event` (TeeRecorder), and hypotheses / matrix columns are published
   as their tool results arrive;
+- a satellite where nothing passes (infeasible, SAFE_MODE recommended) gets a ticket for every plan of its matrix,
+  so the judge can press a red column at any later point and see the physics veto (failed_verification with the
+  failing hypotheses; no open uplink is needed for that refusal);
 - a Tier 2 plan is not approved by the driver: right after that satellite's run the director enters `approval`
   (clock frozen, so its uplink window is still open) with every plan of that satellite ticketed, and waits for the
   judge's Approve, which executes it. Then the storm resumes for the remaining satellites. At the end `fastforward`
@@ -199,7 +202,7 @@ class StormDirector:
         provider, backend = self.provider, self.provider.locked_backend()
         out = {"t": backend.now(), "status": agent.status, "steps": agent.steps,
                "rendered_text": agent.rendered_text, "tier": None, "flight_rule": None, "executed": False}
-        self._publish_matrix(sat, complete=True)
+        matrix = self._publish_matrix(sat, complete=True)
         if dispatcher.last_schedule is not None:
             self.publish("schedule", dispatcher.last_schedule)
         if agent.rendered_text:
@@ -221,6 +224,8 @@ class StormDirector:
             if rank.status == "infeasible" and not out["executed"]:
                 provider.backend.mark(sat, "safe_mode_recommended")
         out["rank_status"] = rank.status
+        if rank.status == "infeasible" and not out["executed"] and (self.pending is None or self.pending.sat_id != sat):
+            self._ticket_all(sat, dispatcher, matrix)  # red columns stay clickable: the physics veto
         self.status.outcomes[sat] = out
         self.status.worked.append(sat)
 
@@ -229,10 +234,7 @@ class StormDirector:
         provider.activate(pending.dispatcher)
         matrix = self._publish_matrix(pending.sat_id, complete=True)
         results = matrix.results if matrix is not None else []
-        for r in results:
-            with provider.lock:
-                ticket = pending.dispatcher.operator_ticket(r.plan_id)
-            self.publish("approval_request", ticket)
+        self._ticket_all(pending.sat_id, pending.dispatcher, matrix)
         if results:
             best = results[0]
             plausible = [h for h in best.plausible if h in best.per_hyp]
@@ -242,6 +244,11 @@ class StormDirector:
                     trajectory = provider.backend.verifier.trajectory(best.plan_id, worst)
                 self.publish("trajectory", trajectory)
         self._phase("approval")
+
+    def _ticket_all(self, sat: str, dispatcher: Any, matrix: MatrixMsg | None) -> None:
+        """An approval ticket for every plan in the satellite's complete matrix (green and red)."""
+        for r in (matrix.results if matrix is not None else []):
+            self.publish("approval_request", self.provider.ticket(dispatcher, r.plan_id))
 
     def _fastforward(self, sat: str) -> None:
         """600x through the approved satellite's next eclipse and its next pass (truth comes down in passes)."""

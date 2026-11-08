@@ -1,3 +1,9 @@
+// Plan and approval ids restart per satellite in a storm (each satellite has its own agent run), so tickets
+// are keyed by satellite and plan.
+export function ticketKey(satId, planId) {
+  return `${satId}/${planId}`;
+}
+
 export function createFlightState() {
   return {
     approvals: {},
@@ -13,7 +19,7 @@ export function reduceFlight(state, message) {
   if (!message?.type || !message.data) return state;
   const data = message.data;
   if (message.type === 'approval_request') {
-    return { ...state, approvals: { ...state.approvals, [data.plan_id]: data }, refusal: null };
+    return { ...state, approvals: { ...state.approvals, [ticketKey(data.sat_id, data.plan_id)]: data }, refusal: null };
   }
   if (message.type === 'clear_refusal') return { ...state, refusal: null };
   if (message.type === 'approval_refused') {

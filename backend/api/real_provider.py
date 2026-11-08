@@ -73,6 +73,7 @@ class RealProvider:
         self._pending_messages: list[dict[str, Any]] = []
         self._held: FleetStateMsg | None = None
         self.holding = False
+        self._routes: dict[str, Any] = {}  # plan_hash -> the dispatcher that issued its ticket (storm)
         self.set_scenario(name, seed)
 
     @property
@@ -103,6 +104,14 @@ class RealProvider:
         with self._lock:
             self.dispatcher = dispatcher
 
+    def ticket(self, dispatcher: Any, plan_id: str) -> Any:
+        """Operator ticket from a satellite's own dispatcher; approve() routes it back there by plan_hash
+        (plan and approval ids restart per satellite in a storm, plan hashes do not)."""
+        with self._lock:
+            ticket = dispatcher.operator_ticket(plan_id)
+            self._routes[ticket.plan_hash] = dispatcher
+            return ticket
+
     def set_scenario(self, name: str, seed: int) -> None:
         from backend.agent.dispatcher import Dispatcher
         from backend.fleet.backend import FleetBackend
@@ -121,6 +130,7 @@ class RealProvider:
             self._pending_messages.clear()
             self.holding = False
             self._held = None
+            self._routes = {}
 
     def fleet_state(self, t: float, speed: float) -> FleetStateMsg:
         held = self._held
@@ -159,10 +169,11 @@ class RealProvider:
 
     def approve(self, approval_id: str, plan_hash: str) -> ApprovalRefused | ExecutionMsg:
         with self._lock:
-            result = self.dispatcher.approve(approval_id, plan_hash)
+            dispatcher = getattr(self, "_routes", {}).get(plan_hash, self.dispatcher)
+            result = dispatcher.approve(approval_id, plan_hash)
             if isinstance(result, ApprovalRefused):
                 return result
-            self.dispatcher.execute(approval_id)
+            dispatcher.execute(approval_id)
             self.executed.add(result.sat_id)
             return ExecutionMsg(plan_id=result.plan_id, sat_id=result.sat_id,
                                 status="executed", t=self.backend.now())
